@@ -42,7 +42,7 @@ const workflowStages: { id: WorkflowStage; label: string; icon: React.ElementTyp
 export function AppSidebar() {
   const router = useRouter()
   const pathname = usePathname()
-  const { currentStage, setCurrentStage, caseData, toggleAiCopilot } = useDashboardStore()
+  const { currentStage, setCurrentStage, caseData, toggleAiCopilot, toggleSettings } = useDashboardStore()
   
   const isNewClientPage = pathname === '/clients/new'
 
@@ -211,7 +211,7 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton>
+                <SidebarMenuButton onClick={toggleSettings}>
                   <Settings className="h-4 w-4" />
                   <span>Settings</span>
                 </SidebarMenuButton>

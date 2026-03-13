@@ -13,7 +13,8 @@ import { CaseTimeline } from '@/components/case-timeline'
 import { DocumentsPanel } from '@/components/documents-panel'
 import { useDashboardStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
-import { MessageSquare, Bell, Search, ArrowLeft } from 'lucide-react'
+import { SettingsDialog } from '@/components/settings-dialog'
+import { MessageSquare, Bell, Search, ArrowLeft, Settings } from 'lucide-react'
 
 export default function CaseDetailPage() {
   const params = useParams()

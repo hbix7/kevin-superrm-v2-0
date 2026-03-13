@@ -39,9 +39,13 @@ import {
   TrendingUp,
   Users,
   DollarSign,
-  Sparkles
+  Sparkles,
+  MessageSquare,
+  Settings
 } from 'lucide-react'
 import { useDashboardStore } from '@/lib/store'
+import { AiCopilot } from '@/components/ai-copilot'
+import { SettingsDialog } from '@/components/settings-dialog'
 
 // Mock cases data for the list
 const mockCases = [
@@ -179,7 +183,7 @@ const formatDate = (date: Date) => {
 
 export default function CasesPage() {
   const router = useRouter()
-  const { setCaseData, setCurrentStage } = useDashboardStore()
+  const { setCaseData, setCurrentStage, toggleAiCopilot, aiCopilotOpen, toggleSettings } = useDashboardStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('all')
 
@@ -235,6 +239,18 @@ export default function CasesPage() {
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-4 w-4" />
               <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive" />
+            </Button>
+            <Button 
+              variant={aiCopilotOpen ? 'default' : 'outline'} 
+              size="sm"
+              onClick={toggleAiCopilot}
+              className="gap-2"
+            >
+              <MessageSquare className="h-4 w-4" />
+              <span className="hidden sm:inline">AI Copilot</span>
+            </Button>
+            <Button variant="ghost" size="icon" onClick={toggleSettings}>
+              <Settings className="h-4 w-4" />
             </Button>
             <Button onClick={() => router.push('/clients/new')} className="gap-2">
               <Plus className="h-4 w-4" />
@@ -455,6 +471,12 @@ export default function CasesPage() {
           </div>
         </main>
       </SidebarInset>
+
+      {/* AI Copilot Panel */}
+      <AiCopilot />
+      
+      {/* Settings Dialog */}
+      <SettingsDialog />
     </SidebarProvider>
   )
 }
