@@ -88,7 +88,10 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => router.push('/')}>
+                <SidebarMenuButton 
+                  isActive={pathname === '/cases' || pathname === '/'}
+                  onClick={() => router.push('/cases')}
+                >
                   <FolderOpen className="h-4 w-4" />
                   <span>All Cases</span>
                 </SidebarMenuButton>

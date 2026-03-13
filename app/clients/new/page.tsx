@@ -215,7 +215,9 @@ export default function NewClientPage() {
     await new Promise(resolve => setTimeout(resolve, 1500))
     
     initializeNewCase(prospect)
-    router.push('/')
+    // Navigate to the case detail page
+    const caseId = `CASE-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(5, '0')}`
+    router.push(`/cases/${caseId}`)
   }
 
   const getCompletionPercentage = () => {
@@ -252,11 +254,11 @@ export default function NewClientPage() {
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={() => router.push('/')}
+              onClick={() => router.push('/cases')}
               className="gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
+              Back to Cases
             </Button>
           </div>
 
