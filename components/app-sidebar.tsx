@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter, usePathname } from 'next/navigation'
 import { 
   Building2, 
   FileSearch, 
@@ -9,7 +10,9 @@ import {
   Settings,
   User,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Plus,
+  FolderOpen
 } from 'lucide-react'
 import {
   Sidebar,
@@ -26,6 +29,7 @@ import {
 } from '@/components/ui/sidebar'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useDashboardStore } from '@/lib/store'
 import type { WorkflowStage } from '@/lib/types'
 
@@ -36,7 +40,11 @@ const workflowStages: { id: WorkflowStage; label: string; icon: React.ElementTyp
 ]
 
 export function AppSidebar() {
+  const router = useRouter()
+  const pathname = usePathname()
   const { currentStage, setCurrentStage, caseData, toggleAiCopilot } = useDashboardStore()
+  
+  const isNewClientPage = pathname === '/clients/new'
 
   const getStageStatus = (stageId: WorkflowStage) => {
     const stageOrder = { screening: 1, underwriting: 2, narrative: 3 }
@@ -63,12 +71,41 @@ export function AppSidebar() {
       </SidebarHeader>
       
       <SidebarContent>
+        {/* Case Management */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground/50 uppercase text-[10px] tracking-wider">
+            Case Management
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isNewClientPage}
+                  onClick={() => router.push('/clients/new')}
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>New Client</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={() => router.push('/')}>
+                  <FolderOpen className="h-4 w-4" />
+                  <span>All Cases</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator />
+
+        {/* Current Case */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/50 uppercase text-[10px] tracking-wider">
             Current Case
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            {caseData && (
+            {caseData && !isNewClientPage ? (
               <div className="px-2 py-2">
                 <div className="rounded-lg bg-sidebar-accent/50 p-3">
                   <div className="flex items-center gap-2 mb-2">
@@ -84,6 +121,20 @@ export function AppSidebar() {
                       {caseData.prospect.industry.split(' - ')[0]}
                     </Badge>
                   </div>
+                </div>
+              </div>
+            ) : (
+              <div className="px-2 py-2">
+                <div className="rounded-lg border border-dashed border-sidebar-border p-3 text-center">
+                  <p className="text-xs text-sidebar-foreground/50">No active case</p>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-primary h-auto p-0 mt-1"
+                    onClick={() => router.push('/clients/new')}
+                  >
+                    Create new client
+                  </Button>
                 </div>
               </div>
             )}
