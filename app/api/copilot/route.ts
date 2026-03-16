@@ -5,6 +5,7 @@ import {
   UIMessage,
 } from 'ai'
 
+// AI Copilot API route for credit analysis assistant
 export const maxDuration = 30
 
 export async function POST(req: Request) {
