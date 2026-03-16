@@ -45,6 +45,7 @@ export function AppSidebar() {
   const { currentStage, setCurrentStage, caseData, toggleAiCopilot, toggleSettings } = useDashboardStore()
   
   const isNewClientPage = pathname === '/clients/new'
+  const isCaseDetailPage = pathname?.startsWith('/cases/') && pathname !== '/cases'
 
   const getStageStatus = (stageId: WorkflowStage) => {
     const stageOrder = { screening: 1, underwriting: 2, narrative: 3 }
@@ -108,9 +109,12 @@ export function AppSidebar() {
             Current Case
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            {caseData && !isNewClientPage ? (
+            {caseData && (isCaseDetailPage || !isNewClientPage) ? (
               <div className="px-2 py-2">
-                <div className="rounded-lg bg-sidebar-accent/50 p-3">
+                <button 
+                  onClick={() => router.push(`/cases/${caseData.id}`)}
+                  className="w-full rounded-lg bg-sidebar-accent/50 p-3 text-left hover:bg-sidebar-accent/70 transition-colors"
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <Building2 className="h-4 w-4 text-sidebar-foreground/70" />
                     <span className="text-sm font-medium text-sidebar-foreground truncate">
@@ -124,7 +128,7 @@ export function AppSidebar() {
                       {caseData.prospect.industry.split(' - ')[0]}
                     </Badge>
                   </div>
-                </div>
+                </button>
               </div>
             ) : (
               <div className="px-2 py-2">

@@ -14,12 +14,22 @@ import { DocumentsPanel } from '@/components/documents-panel'
 import { useDashboardStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { SettingsDialog } from '@/components/settings-dialog'
-import { MessageSquare, Bell, Search, ArrowLeft, Settings } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { MessageSquare, Bell, Search, ArrowLeft, Settings, Loader2 } from 'lucide-react'
 
 export default function CaseDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const { currentStage, toggleAiCopilot, aiCopilotOpen, caseData } = useDashboardStore()
+  const { currentStage, toggleAiCopilot, aiCopilotOpen, caseData, loadCase, currentCaseId, toggleSettings } = useDashboardStore()
+  
+  const caseId = params.id as string
+
+  // Load case data when the page loads or case ID changes
+  useEffect(() => {
+    if (caseId && currentCaseId !== caseId) {
+      loadCase(caseId)
+    }
+  }, [caseId, currentCaseId, loadCase])
 
   const renderStage = () => {
     switch (currentStage) {
@@ -32,6 +42,37 @@ export default function CaseDetailPage() {
       default:
         return <ScreeningStage />
     }
+  }
+
+  // Show loading or not found state
+  if (!caseData) {
+    return (
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset className="flex flex-col">
+          <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+            <SidebarTrigger className="-ml-2" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/cases')}
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              All Cases
+            </Button>
+          </header>
+          <main className="flex-1 flex items-center justify-center">
+            <Card className="w-96">
+              <CardContent className="p-6 text-center">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground">Loading case data...</p>
+              </CardContent>
+            </Card>
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    )
   }
 
   return (
@@ -76,6 +117,9 @@ export default function CaseDetailPage() {
               <MessageSquare className="h-4 w-4" />
               <span className="hidden sm:inline">AI Copilot</span>
             </Button>
+            <Button variant="ghost" size="icon" onClick={toggleSettings}>
+              <Settings className="h-4 w-4" />
+            </Button>
           </div>
         </header>
 
@@ -106,6 +150,9 @@ export default function CaseDetailPage() {
 
       {/* AI Copilot Panel */}
       <AiCopilot />
+      
+      {/* Settings Dialog */}
+      <SettingsDialog />
     </SidebarProvider>
   )
 }

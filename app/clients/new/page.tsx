@@ -214,9 +214,9 @@ export default function NewClientPage() {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1500))
     
-    initializeNewCase(prospect)
+    // Initialize new case and get the case ID
+    const caseId = initializeNewCase(prospect)
     // Navigate to the case detail page
-    const caseId = `CASE-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(5, '0')}`
     router.push(`/cases/${caseId}`)
   }
 

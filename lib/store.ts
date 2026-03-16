@@ -4,6 +4,22 @@ import { create } from 'zustand'
 import type { CaseData, WorkflowStage, Prospect, ScreeningResult, UnderwritingResult, CreditNarrative } from './types'
 import { mockCaseData, mockScreeningResult, mockUnderwritingResult, mockCreditNarrative } from './mock-data'
 
+// Extended case type with status for the cases list
+export interface CaseListItem {
+  id: string
+  companyName: string
+  registrationNumber: string
+  industry: string
+  loanAmount: number
+  stage: WorkflowStage
+  riskScore: number | null
+  status: 'in_progress' | 'pending_approval' | 'approved' | 'declined'
+  rmName: string
+  createdAt: Date
+  lastUpdated: Date
+  caseData: CaseData
+}
+
 interface Settings {
   user: {
     fullName: string
@@ -64,20 +80,237 @@ const defaultSettings: Settings = {
   },
 }
 
+// Initial mock cases list
+const initialCases: CaseListItem[] = [
+  {
+    id: 'CASE-2024-00142',
+    companyName: 'Precision Manufacturing Sdn Bhd',
+    registrationNumber: '201801012345',
+    industry: 'Manufacturing - Metal Components',
+    loanAmount: 2500000,
+    stage: 'narrative',
+    riskScore: 75,
+    status: 'pending_approval',
+    rmName: 'Sarah Tan',
+    createdAt: new Date('2024-01-15'),
+    lastUpdated: new Date('2024-01-18'),
+    caseData: mockCaseData,
+  },
+  {
+    id: 'CASE-2026-00142',
+    companyName: 'TechVenture Solutions Sdn Bhd',
+    registrationNumber: '201901045678',
+    industry: 'Services - IT',
+    loanAmount: 2500000,
+    stage: 'screening',
+    riskScore: null,
+    status: 'in_progress',
+    rmName: 'Ahmad Razif',
+    createdAt: new Date('2026-03-10'),
+    lastUpdated: new Date('2026-03-13'),
+    caseData: {
+      id: 'CASE-2026-00142',
+      prospect: {
+        id: 'PROS-002',
+        companyName: 'TechVenture Solutions Sdn Bhd',
+        registrationNumber: '201901045678',
+        industry: 'Services - IT',
+        yearsOfOperation: 7,
+        estimatedTurnover: 5500000,
+        financingPurpose: 'Business Expansion',
+        requestedLoanAmount: 2500000,
+        directorName: 'Lee Wei Ming',
+        createdAt: new Date('2026-03-10'),
+      },
+      currentStage: 'screening',
+      documents: [],
+      timeline: [
+        { id: 'TL-001', action: 'Case created', timestamp: new Date('2026-03-10'), user: 'Ahmad Razif (RM)' },
+      ],
+    },
+  },
+  {
+    id: 'CASE-2026-00138',
+    companyName: 'Golden Harvest Trading',
+    registrationNumber: '200801023456',
+    industry: 'Trading - Import/Export',
+    loanAmount: 5000000,
+    stage: 'underwriting',
+    riskScore: 68,
+    status: 'in_progress',
+    rmName: 'Ahmad Razif',
+    createdAt: new Date('2026-03-05'),
+    lastUpdated: new Date('2026-03-12'),
+    caseData: {
+      id: 'CASE-2026-00138',
+      prospect: {
+        id: 'PROS-003',
+        companyName: 'Golden Harvest Trading',
+        registrationNumber: '200801023456',
+        industry: 'Trading - Import/Export',
+        yearsOfOperation: 18,
+        estimatedTurnover: 12000000,
+        financingPurpose: 'Trade Financing',
+        requestedLoanAmount: 5000000,
+        directorName: 'Tan Ah Kow',
+        createdAt: new Date('2026-03-05'),
+      },
+      currentStage: 'underwriting',
+      screeningResult: mockScreeningResult,
+      documents: [],
+      timeline: [
+        { id: 'TL-001', action: 'Case created', timestamp: new Date('2026-03-05'), user: 'Ahmad Razif (RM)' },
+        { id: 'TL-002', action: 'AI Rapid Screening completed', timestamp: new Date('2026-03-06'), user: 'System' },
+      ],
+      overallRiskScore: 68,
+    },
+  },
+  {
+    id: 'CASE-2026-00135',
+    companyName: 'Precision Electronics Sdn Bhd',
+    registrationNumber: '201501087654',
+    industry: 'Manufacturing - Electronics',
+    loanAmount: 8000000,
+    stage: 'narrative',
+    riskScore: 82,
+    status: 'pending_approval',
+    rmName: 'Ahmad Razif',
+    createdAt: new Date('2026-02-28'),
+    lastUpdated: new Date('2026-03-11'),
+    caseData: {
+      id: 'CASE-2026-00135',
+      prospect: {
+        id: 'PROS-004',
+        companyName: 'Precision Electronics Sdn Bhd',
+        registrationNumber: '201501087654',
+        industry: 'Manufacturing - Electronics',
+        yearsOfOperation: 11,
+        estimatedTurnover: 25000000,
+        financingPurpose: 'Equipment Purchase',
+        requestedLoanAmount: 8000000,
+        directorName: 'Lim Chee Keong',
+        createdAt: new Date('2026-02-28'),
+      },
+      currentStage: 'narrative',
+      screeningResult: mockScreeningResult,
+      underwritingResult: mockUnderwritingResult,
+      creditNarrative: mockCreditNarrative,
+      documents: [],
+      timeline: [
+        { id: 'TL-001', action: 'Case created', timestamp: new Date('2026-02-28'), user: 'Ahmad Razif (RM)' },
+        { id: 'TL-002', action: 'AI Rapid Screening completed', timestamp: new Date('2026-03-01'), user: 'System' },
+        { id: 'TL-003', action: 'AI Financial Analysis completed', timestamp: new Date('2026-03-05'), user: 'System' },
+        { id: 'TL-004', action: 'AI Credit Narrative generated', timestamp: new Date('2026-03-11'), user: 'System' },
+      ],
+      overallRiskScore: 82,
+    },
+  },
+  {
+    id: 'CASE-2026-00129',
+    companyName: 'Fresh Foods Distribution',
+    registrationNumber: '201201034567',
+    industry: 'Trading - Wholesale',
+    loanAmount: 3500000,
+    stage: 'narrative',
+    riskScore: 45,
+    status: 'declined',
+    rmName: 'Ahmad Razif',
+    createdAt: new Date('2026-02-20'),
+    lastUpdated: new Date('2026-03-08'),
+    caseData: {
+      id: 'CASE-2026-00129',
+      prospect: {
+        id: 'PROS-005',
+        companyName: 'Fresh Foods Distribution',
+        registrationNumber: '201201034567',
+        industry: 'Trading - Wholesale',
+        yearsOfOperation: 14,
+        estimatedTurnover: 8000000,
+        financingPurpose: 'Working Capital',
+        requestedLoanAmount: 3500000,
+        directorName: 'Wong Siew Lan',
+        createdAt: new Date('2026-02-20'),
+      },
+      currentStage: 'narrative',
+      screeningResult: mockScreeningResult,
+      underwritingResult: mockUnderwritingResult,
+      creditNarrative: mockCreditNarrative,
+      documents: [],
+      timeline: [
+        { id: 'TL-001', action: 'Case created', timestamp: new Date('2026-02-20'), user: 'Ahmad Razif (RM)' },
+        { id: 'TL-002', action: 'Case declined - High risk profile', timestamp: new Date('2026-03-08'), user: 'Credit Committee' },
+      ],
+      overallRiskScore: 45,
+    },
+  },
+  {
+    id: 'CASE-2026-00122',
+    companyName: 'BuildRight Construction',
+    registrationNumber: '200901056789',
+    industry: 'Construction',
+    loanAmount: 12000000,
+    stage: 'narrative',
+    riskScore: 75,
+    status: 'approved',
+    rmName: 'Ahmad Razif',
+    createdAt: new Date('2026-02-15'),
+    lastUpdated: new Date('2026-03-05'),
+    caseData: {
+      id: 'CASE-2026-00122',
+      prospect: {
+        id: 'PROS-006',
+        companyName: 'BuildRight Construction',
+        registrationNumber: '200901056789',
+        industry: 'Construction',
+        yearsOfOperation: 17,
+        estimatedTurnover: 35000000,
+        financingPurpose: 'Project Financing',
+        requestedLoanAmount: 12000000,
+        directorName: 'Mohd Faizal',
+        createdAt: new Date('2026-02-15'),
+      },
+      currentStage: 'narrative',
+      screeningResult: mockScreeningResult,
+      underwritingResult: mockUnderwritingResult,
+      creditNarrative: mockCreditNarrative,
+      documents: [],
+      timeline: [
+        { id: 'TL-001', action: 'Case created', timestamp: new Date('2026-02-15'), user: 'Ahmad Razif (RM)' },
+        { id: 'TL-002', action: 'Case approved', timestamp: new Date('2026-03-05'), user: 'Credit Committee' },
+      ],
+      overallRiskScore: 75,
+    },
+  },
+]
+
 interface DashboardState {
+  // Cases list management
+  cases: CaseListItem[]
+  
+  // Current active case
   caseData: CaseData | null
   currentStage: WorkflowStage
+  currentCaseId: string | null
+  
   isLoading: boolean
   aiCopilotOpen: boolean
   settingsOpen: boolean
   settings: Settings
+  
+  // Cases list actions
+  getCaseById: (id: string) => CaseListItem | undefined
+  loadCase: (id: string) => void
+  addCase: (caseItem: CaseListItem) => void
+  updateCaseInList: (id: string, updates: Partial<CaseListItem>) => void
+  
+  // Current case actions
   setCaseData: (data: CaseData) => void
   setCurrentStage: (stage: WorkflowStage) => void
   setLoading: (loading: boolean) => void
   toggleAiCopilot: () => void
   toggleSettings: () => void
   updateSettings: (newSettings: Partial<Settings>) => void
-  initializeNewCase: (prospect: Prospect) => void
+  initializeNewCase: (prospect: Prospect) => string
   runScreening: () => Promise<void>
   runUnderwriting: () => Promise<void>
   generateNarrative: () => Promise<void>
@@ -85,12 +318,39 @@ interface DashboardState {
 }
 
 export const useDashboardStore = create<DashboardState>((set, get) => ({
-  caseData: mockCaseData,
+  cases: initialCases,
+  caseData: null,
   currentStage: 'screening',
+  currentCaseId: null,
   isLoading: false,
   aiCopilotOpen: false,
   settingsOpen: false,
   settings: defaultSettings,
+
+  getCaseById: (id: string) => {
+    return get().cases.find(c => c.id === id)
+  },
+
+  loadCase: (id: string) => {
+    const caseItem = get().cases.find(c => c.id === id)
+    if (caseItem) {
+      set({ 
+        caseData: caseItem.caseData, 
+        currentStage: caseItem.caseData.currentStage,
+        currentCaseId: id
+      })
+    }
+  },
+
+  addCase: (caseItem: CaseListItem) => {
+    set((state) => ({ cases: [caseItem, ...state.cases] }))
+  },
+
+  updateCaseInList: (id: string, updates: Partial<CaseListItem>) => {
+    set((state) => ({
+      cases: state.cases.map(c => c.id === id ? { ...c, ...updates } : c)
+    }))
+  },
 
   setCaseData: (data) => set({ caseData: data }),
   setCurrentStage: (stage) => set({ currentStage: stage }),
@@ -102,8 +362,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   })),
 
   initializeNewCase: (prospect) => {
-    const newCase: CaseData = {
-      id: `CASE-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(5, '0')}`,
+    const caseId = `CASE-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 10000)).padStart(5, '0')}`
+    
+    const newCaseData: CaseData = {
+      id: caseId,
       prospect,
       currentStage: 'screening',
       documents: [],
@@ -116,7 +378,30 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         },
       ],
     }
-    set({ caseData: newCase, currentStage: 'screening' })
+    
+    const newCaseListItem: CaseListItem = {
+      id: caseId,
+      companyName: prospect.companyName,
+      registrationNumber: prospect.registrationNumber,
+      industry: prospect.industry,
+      loanAmount: prospect.requestedLoanAmount,
+      stage: 'screening',
+      riskScore: null,
+      status: 'in_progress',
+      rmName: get().settings.user.fullName,
+      createdAt: new Date(),
+      lastUpdated: new Date(),
+      caseData: newCaseData,
+    }
+    
+    set((state) => ({ 
+      cases: [newCaseListItem, ...state.cases],
+      caseData: newCaseData, 
+      currentStage: 'screening',
+      currentCaseId: caseId
+    }))
+    
+    return caseId
   },
 
   runScreening: async () => {
@@ -124,24 +409,35 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     // Simulate AI processing
     await new Promise((resolve) => setTimeout(resolve, 2000))
     
-    const currentCase = get().caseData
-    if (currentCase) {
+    const { caseData: currentCase, currentCaseId, updateCaseInList } = get()
+    if (currentCase && currentCaseId) {
+      const updatedCase: CaseData = {
+        ...currentCase,
+        screeningResult: mockScreeningResult,
+        timeline: [
+          ...currentCase.timeline,
+          {
+            id: `TL-${Date.now()}`,
+            action: 'AI Rapid Screening completed',
+            timestamp: new Date(),
+            user: 'System',
+          },
+        ],
+      }
+      
       set({
-        caseData: {
-          ...currentCase,
-          screeningResult: mockScreeningResult,
-          timeline: [
-            ...currentCase.timeline,
-            {
-              id: `TL-${Date.now()}`,
-              action: 'AI Rapid Screening completed',
-              timestamp: new Date(),
-              user: 'System',
-            },
-          ],
-        },
+        caseData: updatedCase,
         isLoading: false,
       })
+      
+      // Update in the cases list
+      updateCaseInList(currentCaseId, {
+        caseData: updatedCase,
+        lastUpdated: new Date(),
+        riskScore: mockScreeningResult.overallScore,
+      })
+    } else {
+      set({ isLoading: false })
     }
   },
 
@@ -150,26 +446,38 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     // Simulate AI processing
     await new Promise((resolve) => setTimeout(resolve, 2500))
     
-    const currentCase = get().caseData
-    if (currentCase) {
+    const { caseData: currentCase, currentCaseId, updateCaseInList } = get()
+    if (currentCase && currentCaseId) {
+      const updatedCase: CaseData = {
+        ...currentCase,
+        underwritingResult: mockUnderwritingResult,
+        currentStage: 'underwriting',
+        timeline: [
+          ...currentCase.timeline,
+          {
+            id: `TL-${Date.now()}`,
+            action: 'AI Financial Analysis completed',
+            timestamp: new Date(),
+            user: 'System',
+          },
+        ],
+      }
+      
       set({
-        caseData: {
-          ...currentCase,
-          underwritingResult: mockUnderwritingResult,
-          currentStage: 'underwriting',
-          timeline: [
-            ...currentCase.timeline,
-            {
-              id: `TL-${Date.now()}`,
-              action: 'AI Financial Analysis completed',
-              timestamp: new Date(),
-              user: 'System',
-            },
-          ],
-        },
+        caseData: updatedCase,
         currentStage: 'underwriting',
         isLoading: false,
       })
+      
+      // Update in the cases list
+      updateCaseInList(currentCaseId, {
+        caseData: updatedCase,
+        stage: 'underwriting',
+        lastUpdated: new Date(),
+        riskScore: mockUnderwritingResult.overallScore,
+      })
+    } else {
+      set({ isLoading: false })
     }
   },
 
@@ -178,47 +486,68 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     // Simulate AI processing
     await new Promise((resolve) => setTimeout(resolve, 3000))
     
-    const currentCase = get().caseData
-    if (currentCase) {
+    const { caseData: currentCase, currentCaseId, updateCaseInList } = get()
+    if (currentCase && currentCaseId) {
+      const updatedCase: CaseData = {
+        ...currentCase,
+        creditNarrative: mockCreditNarrative,
+        currentStage: 'narrative',
+        overallRiskScore: 75,
+        timeline: [
+          ...currentCase.timeline,
+          {
+            id: `TL-${Date.now()}`,
+            action: 'AI Credit Narrative generated',
+            timestamp: new Date(),
+            user: 'System',
+          },
+        ],
+      }
+      
       set({
-        caseData: {
-          ...currentCase,
-          creditNarrative: mockCreditNarrative,
-          currentStage: 'narrative',
-          overallRiskScore: 75,
-          timeline: [
-            ...currentCase.timeline,
-            {
-              id: `TL-${Date.now()}`,
-              action: 'AI Credit Narrative generated',
-              timestamp: new Date(),
-              user: 'System',
-            },
-          ],
-        },
+        caseData: updatedCase,
         currentStage: 'narrative',
         isLoading: false,
       })
+      
+      // Update in the cases list
+      updateCaseInList(currentCaseId, {
+        caseData: updatedCase,
+        stage: 'narrative',
+        lastUpdated: new Date(),
+        riskScore: 75,
+        status: 'pending_approval',
+      })
+    } else {
+      set({ isLoading: false })
     }
   },
 
   updateNarrative: (narrative) => {
-    const currentCase = get().caseData
-    if (currentCase) {
+    const { caseData: currentCase, currentCaseId, updateCaseInList } = get()
+    if (currentCase && currentCaseId) {
+      const updatedCase: CaseData = {
+        ...currentCase,
+        creditNarrative: narrative,
+        timeline: [
+          ...currentCase.timeline,
+          {
+            id: `TL-${Date.now()}`,
+            action: 'Credit Narrative updated by RM',
+            timestamp: new Date(),
+            user: 'Current RM',
+          },
+        ],
+      }
+      
       set({
-        caseData: {
-          ...currentCase,
-          creditNarrative: narrative,
-          timeline: [
-            ...currentCase.timeline,
-            {
-              id: `TL-${Date.now()}`,
-              action: 'Credit Narrative updated by RM',
-              timestamp: new Date(),
-              user: 'Current RM',
-            },
-          ],
-        },
+        caseData: updatedCase,
+      })
+      
+      // Update in the cases list
+      updateCaseInList(currentCaseId, {
+        caseData: updatedCase,
+        lastUpdated: new Date(),
       })
     }
   },

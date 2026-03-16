@@ -43,78 +43,9 @@ import {
   MessageSquare,
   Settings
 } from 'lucide-react'
-import { useDashboardStore } from '@/lib/store'
+import { useDashboardStore, type CaseListItem } from '@/lib/store'
 import { AiCopilot } from '@/components/ai-copilot'
 import { SettingsDialog } from '@/components/settings-dialog'
-
-// Mock cases data for the list
-const mockCases = [
-  {
-    id: 'CASE-2026-00142',
-    companyName: 'TechVenture Solutions Sdn Bhd',
-    registrationNumber: '201901045678',
-    industry: 'Services - IT',
-    loanAmount: 2500000,
-    stage: 'screening',
-    riskScore: null,
-    status: 'in_progress',
-    rmName: 'Ahmad Razif',
-    createdAt: new Date('2026-03-10'),
-    lastUpdated: new Date('2026-03-13'),
-  },
-  {
-    id: 'CASE-2026-00138',
-    companyName: 'Golden Harvest Trading',
-    registrationNumber: '200801023456',
-    industry: 'Trading - Import/Export',
-    loanAmount: 5000000,
-    stage: 'underwriting',
-    riskScore: 68,
-    status: 'in_progress',
-    rmName: 'Ahmad Razif',
-    createdAt: new Date('2026-03-05'),
-    lastUpdated: new Date('2026-03-12'),
-  },
-  {
-    id: 'CASE-2026-00135',
-    companyName: 'Precision Manufacturing',
-    registrationNumber: '201501087654',
-    industry: 'Manufacturing - Electronics',
-    loanAmount: 8000000,
-    stage: 'narrative',
-    riskScore: 82,
-    status: 'pending_approval',
-    rmName: 'Ahmad Razif',
-    createdAt: new Date('2026-02-28'),
-    lastUpdated: new Date('2026-03-11'),
-  },
-  {
-    id: 'CASE-2026-00129',
-    companyName: 'Fresh Foods Distribution',
-    registrationNumber: '201201034567',
-    industry: 'Trading - Wholesale',
-    loanAmount: 3500000,
-    stage: 'narrative',
-    riskScore: 45,
-    status: 'declined',
-    rmName: 'Ahmad Razif',
-    createdAt: new Date('2026-02-20'),
-    lastUpdated: new Date('2026-03-08'),
-  },
-  {
-    id: 'CASE-2026-00122',
-    companyName: 'BuildRight Construction',
-    registrationNumber: '200901056789',
-    industry: 'Construction',
-    loanAmount: 12000000,
-    stage: 'narrative',
-    riskScore: 75,
-    status: 'approved',
-    rmName: 'Ahmad Razif',
-    createdAt: new Date('2026-02-15'),
-    lastUpdated: new Date('2026-03-05'),
-  },
-]
 
 const getStageLabel = (stage: string) => {
   switch (stage) {
@@ -183,11 +114,11 @@ const formatDate = (date: Date) => {
 
 export default function CasesPage() {
   const router = useRouter()
-  const { setCaseData, setCurrentStage, toggleAiCopilot, aiCopilotOpen, toggleSettings } = useDashboardStore()
+  const { cases, loadCase, toggleAiCopilot, aiCopilotOpen, toggleSettings } = useDashboardStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('all')
 
-  const filteredCases = mockCases.filter(c => {
+  const filteredCases = cases.filter(c => {
     const matchesSearch = 
       c.companyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -200,18 +131,18 @@ export default function CasesPage() {
     return matchesSearch
   })
 
-  const handleOpenCase = (caseItem: typeof mockCases[0]) => {
-    // Set the case data in the store and navigate to dashboard
-    setCurrentStage(caseItem.stage as 'screening' | 'underwriting' | 'narrative')
+  const handleOpenCase = (caseItem: CaseListItem) => {
+    // Load the case data in the store and navigate to case detail
+    loadCase(caseItem.id)
     router.push(`/cases/${caseItem.id}`)
   }
 
   const stats = {
-    total: mockCases.length,
-    inProgress: mockCases.filter(c => c.status === 'in_progress').length,
-    pending: mockCases.filter(c => c.status === 'pending_approval').length,
-    approved: mockCases.filter(c => c.status === 'approved').length,
-    totalValue: mockCases.reduce((sum, c) => sum + c.loanAmount, 0),
+    total: cases.length,
+    inProgress: cases.filter(c => c.status === 'in_progress').length,
+    pending: cases.filter(c => c.status === 'pending_approval').length,
+    approved: cases.filter(c => c.status === 'approved').length,
+    totalValue: cases.reduce((sum, c) => sum + c.loanAmount, 0),
   }
 
   return (
