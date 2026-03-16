@@ -315,6 +315,7 @@ interface DashboardState {
   runUnderwriting: () => Promise<void>
   generateNarrative: () => Promise<void>
   updateNarrative: (narrative: CreditNarrative) => void
+  submitToCredit: () => Promise<void>
 }
 
 export const useDashboardStore = create<DashboardState>((set, get) => ({
@@ -549,6 +550,42 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         caseData: updatedCase,
         lastUpdated: new Date(),
       })
+    }
+  },
+
+  submitToCredit: async () => {
+    set({ isLoading: true })
+    // Simulate submission processing
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    
+    const { caseData: currentCase, currentCaseId, updateCaseInList, settings } = get()
+    if (currentCase && currentCaseId) {
+      const updatedCase: CaseData = {
+        ...currentCase,
+        timeline: [
+          ...currentCase.timeline,
+          {
+            id: `TL-${Date.now()}`,
+            action: 'Credit Narrative submitted to Credit Committee for approval',
+            timestamp: new Date(),
+            user: settings.user.fullName,
+          },
+        ],
+      }
+      
+      set({
+        caseData: updatedCase,
+        isLoading: false,
+      })
+      
+      // Update in the cases list - change status to pending_approval
+      updateCaseInList(currentCaseId, {
+        caseData: updatedCase,
+        status: 'pending_approval',
+        lastUpdated: new Date(),
+      })
+    } else {
+      set({ isLoading: false })
     }
   },
 }))

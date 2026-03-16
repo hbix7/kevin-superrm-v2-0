@@ -112,14 +112,28 @@ function NarrativeLoadingState() {
 }
 
 export function NarrativeStage() {
-  const { caseData, isLoading, setCurrentStage, updateNarrative, generateNarrative } = useDashboardStore()
+  const { caseData, isLoading, setCurrentStage, updateNarrative, generateNarrative, submitToCredit } = useDashboardStore()
   const [editingSection, setEditingSection] = useState<string | null>(null)
   const [localNarrative, setLocalNarrative] = useState<CreditNarrative | null>(
     caseData?.creditNarrative || null
   )
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSubmitted, setIsSubmitted] = useState(false)
 
   const handleGenerateNarrative = async () => {
     await generateNarrative()
+  }
+
+  const handleSubmitToCredit = async () => {
+    // Save any pending changes first
+    if (localNarrative) {
+      updateNarrative(localNarrative)
+    }
+    
+    setIsSubmitting(true)
+    await submitToCredit()
+    setIsSubmitting(false)
+    setIsSubmitted(true)
   }
 
   if (isLoading) {
@@ -407,10 +421,26 @@ export function NarrativeStage() {
             <Save className="h-4 w-4 mr-2" />
             Save Draft
           </Button>
-          <Button>
-            <Send className="h-4 w-4 mr-2" />
-            Submit to Credit
-          </Button>
+          {isSubmitted ? (
+            <Button disabled className="bg-success text-success-foreground">
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+              Submitted for Approval
+            </Button>
+          ) : (
+            <Button onClick={handleSubmitToCredit} disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Submit to Credit
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </div>
