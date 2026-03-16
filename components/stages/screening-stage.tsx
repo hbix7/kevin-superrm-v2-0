@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   Building2, 
   User, 
@@ -65,8 +65,13 @@ function StatusIcon({ status }: { status: 'clear' | 'probe' | 'drop' }) {
 }
 
 export function ScreeningStage() {
-  const { caseData, isLoading, runScreening, setCurrentStage } = useDashboardStore()
+  const { caseData, isLoading, setCurrentStage } = useDashboardStore()
   const [showForm, setShowForm] = useState(!caseData?.screeningResult)
+
+  // Update showForm when caseData changes (e.g., loading a different case)
+  useEffect(() => {
+    setShowForm(!caseData?.screeningResult)
+  }, [caseData?.id, caseData?.screeningResult])
 
   const screeningResult = caseData?.screeningResult
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   DollarSign,
   TrendingUp,
@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useDashboardStore } from '@/lib/store'
-import type { RiskLevel, UnderwritingCategory } from '@/lib/types'
+import type { RiskLevel, UnderwritingCategory, UnderwritingResult } from '@/lib/types'
 import {
   LineChart,
   Line,
@@ -294,14 +294,96 @@ function DebtChart() {
 }
 
 export function UnderwritingStage() {
-  const { caseData, isLoading, runUnderwriting, setCurrentStage, generateNarrative } = useDashboardStore()
+  const { caseData, isLoading, setLoading, setCaseData, updateCaseInList, currentCaseId, setCurrentStage, generateNarrative } = useDashboardStore()
   const [hasAnalysis, setHasAnalysis] = useState(!!caseData?.underwritingResult)
+
+  // Update hasAnalysis when caseData changes
+  useEffect(() => {
+    setHasAnalysis(!!caseData?.underwritingResult)
+  }, [caseData?.id, caseData?.underwritingResult])
 
   const underwritingResult = caseData?.underwritingResult
 
   const handleRunAnalysis = async () => {
-    await runUnderwriting()
-    setHasAnalysis(true)
+    if (!caseData || !currentCaseId) return
+    
+    setLoading(true)
+    
+    try {
+      const response = await fetch('/api/underwriting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          prospect: caseData.prospect,
+          screeningResult: caseData.screeningResult 
+        }),
+      })
+
+      if (!response.ok) throw new Error('Underwriting failed')
+
+      // Parse SSE stream
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let underwritingResultData: UnderwritingResult | null = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (trimmed.startsWith('data:')) {
+            const data = trimmed.slice(5).trim()
+            if (data === '[DONE]') continue
+            try {
+              const parsed = JSON.parse(data)
+              if (parsed.type === 'output' && parsed.output) {
+                underwritingResultData = parsed.output as UnderwritingResult
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+
+      if (underwritingResultData) {
+        const updatedCase = {
+          ...caseData,
+          underwritingResult: underwritingResultData,
+          currentStage: 'underwriting' as const,
+          timeline: [
+            ...caseData.timeline,
+            {
+              id: `TL-${Date.now()}`,
+              action: 'AI Financial Analysis completed',
+              timestamp: new Date(),
+              user: 'System',
+            },
+          ],
+        }
+
+        setCaseData(updatedCase)
+        updateCaseInList(currentCaseId, {
+          caseData: updatedCase,
+          stage: 'underwriting',
+          lastUpdated: new Date(),
+          riskScore: underwritingResultData.overallScore,
+        })
+        setHasAnalysis(true)
+      }
+    } catch (error) {
+      console.error('Underwriting error:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (!hasAnalysis || !underwritingResult) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Building2,
   TrendingUp,
@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useDashboardStore } from '@/lib/store'
-import type { CreditNarrative, RecommendationAction } from '@/lib/types'
+import type { CreditNarrative, RecommendationAction, CaseData } from '@/lib/types'
 
 function RecommendationBadge({ recommendation }: { recommendation: RecommendationAction }) {
   const config: Record<RecommendationAction, { label: string; className: string }> = {
@@ -112,7 +112,7 @@ function NarrativeLoadingState() {
 }
 
 export function NarrativeStage() {
-  const { caseData, isLoading, setCurrentStage, updateNarrative, generateNarrative, submitToCredit } = useDashboardStore()
+  const { caseData, isLoading, setLoading, setCaseData, updateCaseInList, currentCaseId, setCurrentStage, updateNarrative, submitToCredit } = useDashboardStore()
   const [editingSection, setEditingSection] = useState<string | null>(null)
   const [localNarrative, setLocalNarrative] = useState<CreditNarrative | null>(
     caseData?.creditNarrative || null
@@ -120,8 +120,96 @@ export function NarrativeStage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
 
+  // Update local narrative when case changes
+  useEffect(() => {
+    setLocalNarrative(caseData?.creditNarrative || null)
+    setIsSubmitted(false)
+  }, [caseData?.id, caseData?.creditNarrative])
+
   const handleGenerateNarrative = async () => {
-    await generateNarrative()
+    if (!caseData || !currentCaseId) return
+    
+    setLoading(true)
+    
+    try {
+      const response = await fetch('/api/narrative', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          prospect: caseData.prospect,
+          screeningResult: caseData.screeningResult,
+          underwritingResult: caseData.underwritingResult
+        }),
+      })
+
+      if (!response.ok) throw new Error('Narrative generation failed')
+
+      // Parse SSE stream
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let narrativeResult: CreditNarrative | null = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (trimmed.startsWith('data:')) {
+            const data = trimmed.slice(5).trim()
+            if (data === '[DONE]') continue
+            try {
+              const parsed = JSON.parse(data)
+              if (parsed.type === 'output' && parsed.output) {
+                narrativeResult = parsed.output as CreditNarrative
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+
+      if (narrativeResult) {
+        setLocalNarrative(narrativeResult)
+        
+        const updatedCase: CaseData = {
+          ...caseData,
+          creditNarrative: narrativeResult,
+          currentStage: 'narrative',
+          overallRiskScore: narrativeResult.confidenceScore,
+          timeline: [
+            ...caseData.timeline,
+            {
+              id: `TL-${Date.now()}`,
+              action: 'AI Credit Narrative generated',
+              timestamp: new Date(),
+              user: 'System',
+            },
+          ],
+        }
+
+        setCaseData(updatedCase)
+        updateCaseInList(currentCaseId, {
+          caseData: updatedCase,
+          stage: 'narrative',
+          lastUpdated: new Date(),
+          riskScore: narrativeResult.confidenceScore,
+          status: 'pending_approval',
+        })
+      }
+    } catch (error) {
+      console.error('Narrative error:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSubmitToCredit = async () => {
