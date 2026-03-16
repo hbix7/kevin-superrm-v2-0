@@ -1,11 +1,3 @@
-import {
-  consumeStream,
-  convertToModelMessages,
-  streamText,
-  UIMessage,
-} from 'ai'
-
-// AI Copilot API route for credit analysis assistant
 export const maxDuration = 30
 
 interface CaseContext {
@@ -21,8 +13,8 @@ interface CaseContext {
   riskScore?: number | null
 }
 
-// Generate a context-aware response when AI Gateway is unavailable
-function generateFallbackResponse(userMessage: string, caseContext?: CaseContext): string {
+// Generate a context-aware response based on user query and case context
+function generateResponse(userMessage: string, caseContext?: CaseContext): string {
   const lowerMsg = userMessage.toLowerCase()
   
   if (!caseContext) {
@@ -139,6 +131,32 @@ ${stage === 'screening' ? '1. Complete AI screening analysis\n2. Review all chec
 Need me to elaborate on any aspect?`
   }
 
+  if (lowerMsg.includes('industry') || lowerMsg.includes('sector') || lowerMsg.includes('market')) {
+    const industryType = industry.split(' - ')[0] || industry
+    return `## Industry Analysis: ${industry}
+
+**Sector Overview:**
+The ${industryType} sector in Malaysia represents a significant component of the economy with diverse players ranging from SMEs to large corporations.
+
+**Key Characteristics:**
+- Typical gross margins: 20-35%
+- Working capital intensity: ${industry.includes('Trading') ? 'High' : industry.includes('Manufacturing') ? 'Moderate-High' : 'Moderate'}
+- Regulatory environment: Stable with standard compliance requirements
+- Growth outlook: ${yearsOfOperation >= 5 ? 'Steady with established players maintaining market share' : 'Competitive with opportunities for growth'}
+
+**Risk Factors for ${industryType}:**
+1. Economic cycle sensitivity
+2. ${industry.includes('Trading') ? 'Foreign exchange exposure' : 'Raw material price fluctuations'}
+3. Competition from regional players
+4. ${industry.includes('Manufacturing') ? 'Technology disruption risks' : 'Supply chain dependencies'}
+
+**Benchmarks for ${companyName}:**
+- Turnover of MYR ${estimatedTurnover.toLocaleString()} indicates ${estimatedTurnover > 10000000 ? 'mid-sized player' : 'SME category'}
+- ${yearsOfOperation} years suggests ${yearsOfOperation >= 5 ? 'established market presence' : 'developing business'}
+
+Would you like more specific benchmarks or competitor analysis?`
+  }
+
   // Default helpful response
   return `## How Can I Help with ${companyName}?
 
@@ -161,56 +179,19 @@ ${riskScore ? `- Risk Score: ${riskScore}/100` : ''}
 What would you like to know?`
 }
 
+interface MessagePart {
+  type: string
+  text?: string
+}
+
+interface Message {
+  role: string
+  parts?: MessagePart[]
+}
+
 export async function POST(req: Request) {
-  const { messages, caseContext }: { messages: UIMessage[]; caseContext?: CaseContext } = await req.json()
-
-  const systemPrompt = `You are an AI Credit Analyst Copilot for a bank's SME lending platform. You help Relationship Managers (RMs) analyze loan applications, understand risks, and make informed credit decisions.
-
-${caseContext ? `
-## Current Case Context
-- **Company**: ${caseContext.companyName}
-- **Registration Number**: ${caseContext.registrationNumber}
-- **Industry**: ${caseContext.industry}
-- **Years of Operation**: ${caseContext.yearsOfOperation}
-- **Estimated Annual Turnover**: MYR ${caseContext.estimatedTurnover?.toLocaleString() || 'N/A'}
-- **Requested Loan Amount**: MYR ${caseContext.loanAmount?.toLocaleString() || 'N/A'}
-- **Financing Purpose**: ${caseContext.financingPurpose}
-- **Director/Key Person**: ${caseContext.directorName}
-- **Current Stage**: ${caseContext.stage}
-${caseContext.riskScore ? `- **Risk Score**: ${caseContext.riskScore}/100` : ''}
-` : ''}
-
-## Your Capabilities
-1. **Risk Analysis**: Identify and explain key risks for borrowers including customer concentration, market risks, operational risks, and financial risks.
-2. **Financial Metrics**: Explain and contextualize financial ratios like DSCR, current ratio, debt-to-equity, and compare them to industry benchmarks.
-3. **Document Guidance**: Recommend additional documents that should be requested for a complete credit assessment.
-4. **Industry Insights**: Provide relevant industry context and benchmarks for the specific sector.
-5. **Credit Recommendations**: Offer structured analysis to support credit decisions.
-
-## Response Guidelines
-- Be concise but thorough
-- Use bullet points and formatting for clarity
-- Always relate insights back to the specific case when context is available
-- Highlight both risks and mitigating factors
-- Use Malaysian Ringgit (MYR) for currency references
-- Reference industry standards and banking best practices
-- If asked about something not related to credit analysis, politely redirect to relevant topics`
-
   try {
-    const result = streamText({
-      model: 'openai/gpt-4o-mini',
-      system: systemPrompt,
-      messages: await convertToModelMessages(messages),
-      abortSignal: req.signal,
-    })
-
-    return result.toUIMessageStreamResponse({
-      originalMessages: messages,
-      consumeSseStream: consumeStream,
-    })
-  } catch (aiError) {
-    // AI Gateway unavailable - use intelligent fallback
-    console.log('AI Gateway unavailable, using fallback copilot response')
+    const { messages, caseContext }: { messages: Message[]; caseContext?: CaseContext } = await req.json()
     
     // Get the last user message
     const lastUserMessage = messages.filter(m => m.role === 'user').pop()
@@ -219,13 +200,16 @@ ${caseContext.riskScore ? `- **Risk Score**: ${caseContext.riskScore}/100` : ''}
       .map(p => p.text)
       .join('') || ''
     
-    const fallbackResponse = generateFallbackResponse(userText, caseContext)
+    const response = generateResponse(userText, caseContext)
+    
+    // Simulate processing time for realistic UX
+    await new Promise(resolve => setTimeout(resolve, 500))
     
     // Return as SSE stream format for consistency with useChat
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text-delta', delta: fallbackResponse })}\n\n`))
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text-delta', delta: response })}\n\n`))
         controller.enqueue(encoder.encode('data: [DONE]\n\n'))
         controller.close()
       }
@@ -237,6 +221,12 @@ ${caseContext.riskScore ? `- **Risk Score**: ${caseContext.riskScore}/100` : ''}
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive'
       }
+    })
+  } catch (error) {
+    console.error('Copilot API error:', error)
+    return new Response(JSON.stringify({ error: 'Failed to process request' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
     })
   }
 }
