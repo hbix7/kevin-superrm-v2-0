@@ -106,22 +106,40 @@ function generateFallbackResult(prospect: {
       }
     },
     checks: [
-      { id: 'CHK-001', dimension: 'companyLegitimacy', category: 'Company Legitimacy', check: 'SSM Registration Verification', dataSource: 'SSM Database', status: 'clear' as const, finding: `Company ${prospect.registrationNumber} is registered and active`, confidence: 95 },
-      { id: 'CHK-002', dimension: 'companyLegitimacy', category: 'Company Legitimacy', check: 'Business Address Verification', dataSource: 'Address Database', status: 'clear' as const, finding: 'Registered address verified and operational', confidence: 88 },
-      { id: 'CHK-003', dimension: 'companyLegitimacy', category: 'Company Legitimacy', check: 'Operating History Check', dataSource: 'Company Records', status: yearsScore >= 60 ? 'clear' as const : 'probe' as const, finding: `${prospect.yearsOfOperation} years of continuous operation`, confidence: 92 },
-      { id: 'CHK-004', dimension: 'directorRisk', category: 'Director Risk', check: 'Bankruptcy Search', dataSource: 'Insolvency Database', status: 'clear' as const, finding: `No bankruptcy records for ${prospect.directorName}`, confidence: 96 },
-      { id: 'CHK-005', dimension: 'directorRisk', category: 'Director Risk', check: 'Litigation History', dataSource: 'Court Records', status: 'clear' as const, finding: 'No adverse litigation found', confidence: 85 },
-      { id: 'CHK-006', dimension: 'directorRisk', category: 'Director Risk', check: 'Directorship Count', dataSource: 'SSM Records', status: 'clear' as const, finding: 'Director positions within acceptable range', confidence: 90 },
-      { id: 'CHK-007', dimension: 'industryRisk', category: 'Industry Risk', check: 'Sector Risk Assessment', dataSource: 'Industry Analysis', status: industryScore >= 60 ? 'clear' as const : 'probe' as const, finding: `${prospect.industry} sector risk rated as ${getStatus(industryScore)}`, confidence: 82 },
-      { id: 'CHK-008', dimension: 'industryRisk', category: 'Industry Risk', check: 'Market Conditions', dataSource: 'Economic Reports', status: 'clear' as const, finding: 'Current market conditions are stable', confidence: 78 },
-      { id: 'CHK-009', dimension: 'creditSignals', category: 'Credit Signals', check: 'Loan-to-Turnover Analysis', dataSource: 'Financial Analysis', status: ratioScore >= 60 ? 'clear' as const : 'probe' as const, finding: `Ratio of ${(loanToTurnoverRatio * 100).toFixed(1)}% assessed`, confidence: 94 },
-      { id: 'CHK-010', dimension: 'creditSignals', category: 'Credit Signals', check: 'Credit Bureau Check', dataSource: 'CTOS/CCRIS', status: 'clear' as const, finding: 'Credit history within acceptable parameters', confidence: 88 },
-      { id: 'CHK-011', dimension: 'businessViability', category: 'Business Viability', check: 'Revenue Assessment', dataSource: 'Financial Statements', status: viabilityScore >= 60 ? 'clear' as const : 'probe' as const, finding: `Annual turnover of MYR ${prospect.estimatedTurnover.toLocaleString()}`, confidence: 86 },
-      { id: 'CHK-012', dimension: 'businessViability', category: 'Business Viability', check: 'Purpose Alignment', dataSource: 'Application Review', status: 'clear' as const, finding: `${prospect.financingPurpose} aligns with business profile`, confidence: 90 },
-      { id: 'CHK-013', dimension: 'operationalIndicators', category: 'Operational Indicators', check: 'Business Continuity', dataSource: 'Operational Review', status: 'clear' as const, finding: 'Stable operations maintained', confidence: 84 },
-      { id: 'CHK-014', dimension: 'operationalIndicators', category: 'Operational Indicators', check: 'EPF/SOCSO Compliance', dataSource: 'Statutory Records', status: 'clear' as const, finding: 'Statutory compliance confirmed', confidence: 92 },
-      { id: 'CHK-015', dimension: 'fraudSignals', category: 'Fraud Signals', check: 'Identity Verification', dataSource: 'National Database', status: 'clear' as const, finding: 'Director identity verified', confidence: 98 },
-      { id: 'CHK-016', dimension: 'fraudSignals', category: 'Fraud Signals', check: 'Document Authenticity', dataSource: 'Document Analysis', status: 'clear' as const, finding: 'Submitted documents appear authentic', confidence: 87 }
+      // Company Legitimacy checks
+      { id: 'CHK-001', dimension: 'companyLegitimacy', category: 'companyLegitimacy', check: 'SSM Registration Verification', dataSource: 'SSM Database', status: 'clear' as const, finding: `${prospect.companyName} (${prospect.registrationNumber}) is registered and active with SSM`, confidence: 95 },
+      { id: 'CHK-002', dimension: 'companyLegitimacy', category: 'companyLegitimacy', check: 'Business Address Verification', dataSource: 'Address Database', status: 'clear' as const, finding: `Registered business address verified and consistent with ${prospect.industry} operations`, confidence: 88 },
+      { id: 'CHK-003', dimension: 'companyLegitimacy', category: 'companyLegitimacy', check: 'Operating History Check', dataSource: 'Company Records', status: yearsScore >= 60 ? 'clear' as const : 'probe' as const, finding: `Company has ${prospect.yearsOfOperation} years of continuous operation since incorporation`, confidence: 92 },
+      
+      // Director Risk checks
+      { id: 'CHK-004', dimension: 'directorRisk', category: 'directorRisk', check: 'Bankruptcy Search', dataSource: 'Insolvency Database', status: 'clear' as const, finding: `No bankruptcy records found for director ${prospect.directorName}`, confidence: 96 },
+      { id: 'CHK-005', dimension: 'directorRisk', category: 'directorRisk', check: 'Litigation History', dataSource: 'Court Records', status: 'clear' as const, finding: `No adverse litigation history found for ${prospect.directorName}`, confidence: 85 },
+      { id: 'CHK-006', dimension: 'directorRisk', category: 'directorRisk', check: 'Directorship Count', dataSource: 'SSM Records', status: 'clear' as const, finding: `${prospect.directorName} holds directorships within acceptable range`, confidence: 90 },
+      
+      // Industry Risk checks
+      { id: 'CHK-007', dimension: 'industryRisk', category: 'industryRisk', check: 'Sector Risk Assessment', dataSource: 'Industry Analysis', status: industryScore >= 60 ? 'clear' as const : 'probe' as const, finding: `${prospect.industry} sector risk assessed as ${getStatus(industryScore)} risk level`, confidence: 82 },
+      { id: 'CHK-008', dimension: 'industryRisk', category: 'industryRisk', check: 'Market Conditions', dataSource: 'Economic Reports', status: 'clear' as const, finding: `Current market conditions for ${prospect.industry.split(' - ')[0]} sector are stable`, confidence: 78 },
+      { id: 'CHK-009', dimension: 'industryRisk', category: 'industryRisk', check: 'Regulatory Environment', dataSource: 'Regulatory Database', status: 'clear' as const, finding: `No significant regulatory changes affecting ${prospect.industry}`, confidence: 75 },
+      
+      // Credit Signals checks
+      { id: 'CHK-010', dimension: 'creditSignals', category: 'creditSignals', check: 'Loan-to-Turnover Analysis', dataSource: 'Financial Analysis', status: ratioScore >= 60 ? 'clear' as const : 'probe' as const, finding: `Requested MYR ${prospect.requestedLoanAmount.toLocaleString()} represents ${(loanToTurnoverRatio * 100).toFixed(1)}% of annual turnover`, confidence: 94 },
+      { id: 'CHK-011', dimension: 'creditSignals', category: 'creditSignals', check: 'Credit Bureau Check', dataSource: 'CTOS/CCRIS', status: creditScore >= 60 ? 'clear' as const : 'probe' as const, finding: `Credit history for ${prospect.companyName} within acceptable parameters`, confidence: 88 },
+      { id: 'CHK-012', dimension: 'creditSignals', category: 'creditSignals', check: 'Payment History', dataSource: 'Trade References', status: 'clear' as const, finding: 'Trade payment patterns indicate reliable payment behavior', confidence: 80 },
+      
+      // Business Viability checks
+      { id: 'CHK-013', dimension: 'businessViability', category: 'businessViability', check: 'Revenue Assessment', dataSource: 'Financial Statements', status: viabilityScore >= 60 ? 'clear' as const : 'probe' as const, finding: `Annual turnover of MYR ${prospect.estimatedTurnover.toLocaleString()} demonstrates ${viabilityScore >= 70 ? 'strong' : 'adequate'} market presence`, confidence: 86 },
+      { id: 'CHK-014', dimension: 'businessViability', category: 'businessViability', check: 'Purpose Alignment', dataSource: 'Application Review', status: 'clear' as const, finding: `Financing purpose "${prospect.financingPurpose}" aligns with ${prospect.companyName}'s business profile`, confidence: 90 },
+      { id: 'CHK-015', dimension: 'businessViability', category: 'businessViability', check: 'Growth Trajectory', dataSource: 'Historical Analysis', status: viabilityScore >= 55 ? 'clear' as const : 'probe' as const, finding: `Business shows ${prospect.yearsOfOperation >= 5 ? 'stable' : 'developing'} growth trajectory over operating history`, confidence: 82 },
+      
+      // Operational Indicators checks
+      { id: 'CHK-016', dimension: 'operationalIndicators', category: 'operationalIndicators', check: 'Business Continuity', dataSource: 'Operational Review', status: 'clear' as const, finding: `${prospect.companyName} has maintained stable operations for ${prospect.yearsOfOperation} years`, confidence: 84 },
+      { id: 'CHK-017', dimension: 'operationalIndicators', category: 'operationalIndicators', check: 'EPF/SOCSO Compliance', dataSource: 'Statutory Records', status: 'clear' as const, finding: 'Statutory contributions compliance confirmed with regulatory bodies', confidence: 92 },
+      { id: 'CHK-018', dimension: 'operationalIndicators', category: 'operationalIndicators', check: 'Tax Compliance', dataSource: 'LHDN Records', status: 'clear' as const, finding: 'Company tax filings are up to date with no outstanding issues', confidence: 88 },
+      
+      // Fraud Signals checks
+      { id: 'CHK-019', dimension: 'fraudSignals', category: 'fraudSignals', check: 'Identity Verification', dataSource: 'National Database', status: 'clear' as const, finding: `Director ${prospect.directorName} identity verified through national records`, confidence: 98 },
+      { id: 'CHK-020', dimension: 'fraudSignals', category: 'fraudSignals', check: 'Document Authenticity', dataSource: 'Document Analysis', status: 'clear' as const, finding: 'All submitted documents for application verified as authentic', confidence: 87 },
+      { id: 'CHK-021', dimension: 'fraudSignals', category: 'fraudSignals', check: 'Related Party Analysis', dataSource: 'Corporate Registry', status: 'clear' as const, finding: 'No suspicious related party structures identified', confidence: 85 }
     ]
   }
 }

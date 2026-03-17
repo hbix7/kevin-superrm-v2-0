@@ -218,7 +218,7 @@ export function ScreeningStage() {
                     </thead>
                     <tbody className="divide-y divide-border">
                       {screeningResult.checks
-                        .filter((check) => check.category === dimensionKey)
+                        .filter((check) => check.dimension === dimensionKey)
                         .map((check) => (
                           <tr key={check.id} className="hover:bg-muted/30">
                             <td className="p-3 text-sm font-medium text-foreground">{check.check}</td>
