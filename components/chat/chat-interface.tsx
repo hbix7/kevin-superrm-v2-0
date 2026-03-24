@@ -289,13 +289,115 @@ export function ChatInterface() {
         // Show loading message
         addMessage({
           role: 'assistant',
-          content: "Generating comprehensive credit narrative...",
+          content: "Generating comprehensive credit narrative based on the company details and financial analysis...",
           metadata: { isLoading: true },
           stage: 'narrative',
         })
         setStage('narrative')
         
-        await generateNarrative()
+        try {
+          // Get current case data for API call
+          const currentCaseData = useDashboardStore.getState().caseData
+          
+          if (currentCaseData) {
+            // Call the narrative API with actual case data
+            const narrativeResponse = await fetch('/api/narrative', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                prospect: currentCaseData.prospect,
+                screeningResult: currentCaseData.screeningResult,
+                underwritingResult: currentCaseData.underwritingResult,
+              }),
+            })
+            
+            if (!narrativeResponse.ok) {
+              throw new Error('Narrative generation failed')
+            }
+            
+            // Parse SSE stream
+            const reader = narrativeResponse.body?.getReader()
+            if (!reader) throw new Error('No response body')
+            
+            const decoder = new TextDecoder()
+            let buffer = ''
+            let narrativeResult = null
+            
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+              
+              buffer += decoder.decode(value, { stream: true })
+              const lines = buffer.split('\n')
+              buffer = lines.pop() || ''
+              
+              for (const line of lines) {
+                const trimmed = line.trim()
+                if (trimmed.startsWith('data:')) {
+                  const data = trimmed.slice(5).trim()
+                  if (data === '[DONE]') continue
+                  try {
+                    const parsed = JSON.parse(data)
+                    if (parsed.type === 'output' && parsed.output) {
+                      narrativeResult = parsed.output
+                    }
+                  } catch {
+                    // Skip invalid JSON
+                  }
+                }
+              }
+            }
+            
+            if (narrativeResult) {
+              // Update the store with the real narrative
+              useDashboardStore.setState((state) => {
+                if (!state.caseData || !state.currentCaseId) return state
+                
+                const updatedCase = {
+                  ...state.caseData,
+                  creditNarrative: narrativeResult,
+                  currentStage: 'narrative' as const,
+                  overallRiskScore: narrativeResult.confidenceScore,
+                  timeline: [
+                    ...state.caseData.timeline,
+                    {
+                      id: `TL-${Date.now()}`,
+                      action: 'AI Credit Narrative generated',
+                      timestamp: new Date(),
+                      user: 'System',
+                    },
+                  ],
+                }
+                
+                return {
+                  caseData: updatedCase,
+                  currentStage: 'narrative' as const,
+                  cases: state.cases.map(c => 
+                    c.id === state.currentCaseId 
+                      ? { ...c, caseData: updatedCase, stage: 'narrative' as const, riskScore: narrativeResult.confidenceScore, status: 'pending_approval' as const, lastUpdated: new Date() }
+                      : c
+                  ),
+                }
+              })
+              
+              response = engine.getNarrativeComplete(narrativeResult)
+              updateLastAssistantMessage({
+                content: response.message,
+                actions: response.actions,
+                metadata: { ...response.metadata, isLoading: false },
+                stage: response.nextStage,
+              })
+              if (response.nextStage) {
+                setStage(response.nextStage)
+              }
+              return
+            }
+          }
+        } catch (error) {
+          console.error('Narrative generation error:', error)
+          // Fallback to store method which has its own fallback
+          await generateNarrative()
+        }
         
         const narCase = useDashboardStore.getState().caseData
         if (narCase?.creditNarrative) {

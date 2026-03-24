@@ -484,41 +484,124 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 
   generateNarrative: async () => {
     set({ isLoading: true })
-    // Simulate AI processing
-    await new Promise((resolve) => setTimeout(resolve, 3000))
     
     const { caseData: currentCase, currentCaseId, updateCaseInList } = get()
     if (currentCase && currentCaseId) {
-      const updatedCase: CaseData = {
-        ...currentCase,
-        creditNarrative: mockCreditNarrative,
-        currentStage: 'narrative',
-        overallRiskScore: 75,
-        timeline: [
-          ...currentCase.timeline,
-          {
-            id: `TL-${Date.now()}`,
-            action: 'AI Credit Narrative generated',
-            timestamp: new Date(),
-            user: 'System',
-          },
-        ],
+      try {
+        // Call the real narrative API with actual case data
+        const response = await fetch('/api/narrative', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prospect: currentCase.prospect,
+            screeningResult: currentCase.screeningResult,
+            underwritingResult: currentCase.underwritingResult,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error('Narrative generation failed')
+        }
+
+        // Parse SSE stream
+        const reader = response.body?.getReader()
+        if (!reader) throw new Error('No response body')
+
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let narrativeResult: CreditNarrative | null = null
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (trimmed.startsWith('data:')) {
+              const data = trimmed.slice(5).trim()
+              if (data === '[DONE]') continue
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.type === 'output' && parsed.output) {
+                  narrativeResult = parsed.output as CreditNarrative
+                }
+              } catch {
+                // Skip invalid JSON
+              }
+            }
+          }
+        }
+
+        if (narrativeResult) {
+          const updatedCase: CaseData = {
+            ...currentCase,
+            creditNarrative: narrativeResult,
+            currentStage: 'narrative',
+            overallRiskScore: narrativeResult.confidenceScore,
+            timeline: [
+              ...currentCase.timeline,
+              {
+                id: `TL-${Date.now()}`,
+                action: 'AI Credit Narrative generated',
+                timestamp: new Date(),
+                user: 'System',
+              },
+            ],
+          }
+          
+          set({
+            caseData: updatedCase,
+            currentStage: 'narrative',
+            isLoading: false,
+          })
+          
+          // Update in the cases list
+          updateCaseInList(currentCaseId, {
+            caseData: updatedCase,
+            stage: 'narrative',
+            lastUpdated: new Date(),
+            riskScore: narrativeResult.confidenceScore,
+            status: 'pending_approval',
+          })
+          return
+        }
+      } catch (error) {
+        console.error('Narrative generation error:', error)
+        // Fallback to mock data if API fails
+        const updatedCase: CaseData = {
+          ...currentCase,
+          creditNarrative: mockCreditNarrative,
+          currentStage: 'narrative',
+          overallRiskScore: 75,
+          timeline: [
+            ...currentCase.timeline,
+            {
+              id: `TL-${Date.now()}`,
+              action: 'AI Credit Narrative generated',
+              timestamp: new Date(),
+              user: 'System',
+            },
+          ],
+        }
+        
+        set({
+          caseData: updatedCase,
+          currentStage: 'narrative',
+          isLoading: false,
+        })
+        
+        updateCaseInList(currentCaseId, {
+          caseData: updatedCase,
+          stage: 'narrative',
+          lastUpdated: new Date(),
+          riskScore: 75,
+          status: 'pending_approval',
+        })
       }
-      
-      set({
-        caseData: updatedCase,
-        currentStage: 'narrative',
-        isLoading: false,
-      })
-      
-      // Update in the cases list
-      updateCaseInList(currentCaseId, {
-        caseData: updatedCase,
-        stage: 'narrative',
-        lastUpdated: new Date(),
-        riskScore: 75,
-        status: 'pending_approval',
-      })
     } else {
       set({ isLoading: false })
     }
