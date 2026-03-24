@@ -374,60 +374,62 @@ export function ChatSidebar({
         </div>
       </div>
       
-      {/* Cases list grouped by status */}
-      <ScrollArea className="flex-1 px-2">
-        <div className="pb-4 space-y-2">
-          {filteredCases.length === 0 ? (
-            <div className="text-center py-12 px-4">
-              <div className="w-12 h-12 rounded-full bg-sidebar-accent mx-auto mb-3 flex items-center justify-center">
-                <Building2 className="h-6 w-6 text-sidebar-foreground/40" />
+      {/* Cases list grouped by status - Scrollable */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="px-2 pb-4 space-y-2">
+            {filteredCases.length === 0 ? (
+              <div className="text-center py-12 px-4">
+                <div className="w-12 h-12 rounded-full bg-sidebar-accent mx-auto mb-3 flex items-center justify-center">
+                  <Building2 className="h-6 w-6 text-sidebar-foreground/40" />
+                </div>
+                <p className="text-sm text-sidebar-foreground/60 font-medium">No cases found</p>
+                <p className="text-xs text-sidebar-foreground/40 mt-1">
+                  {searchQuery ? 'Try a different search term' : 'Start a new assessment'}
+                </p>
               </div>
-              <p className="text-sm text-sidebar-foreground/60 font-medium">No cases found</p>
-              <p className="text-xs text-sidebar-foreground/40 mt-1">
-                {searchQuery ? 'Try a different search term' : 'Start a new assessment'}
-              </p>
-            </div>
-          ) : (
-            <>
-              <CaseGroup
-                title="In Progress"
-                cases={groupedCases.inProgress}
-                selectedCaseId={selectedCaseId}
-                onSelectCase={onSelectCase}
-                defaultOpen={true}
-                icon={Clock}
-              />
-              
-              <CaseGroup
-                title="Pending Approval"
-                cases={groupedCases.pending}
-                selectedCaseId={selectedCaseId}
-                onSelectCase={onSelectCase}
-                defaultOpen={true}
-                icon={CircleDot}
-              />
-              
-              <CaseGroup
-                title="Approved"
-                cases={groupedCases.approved}
-                selectedCaseId={selectedCaseId}
-                onSelectCase={onSelectCase}
-                defaultOpen={false}
-                icon={CheckCircle2}
-              />
-              
-              <CaseGroup
-                title="Declined"
-                cases={groupedCases.declined}
-                selectedCaseId={selectedCaseId}
-                onSelectCase={onSelectCase}
-                defaultOpen={false}
-                icon={XCircle}
-              />
-            </>
-          )}
-        </div>
-      </ScrollArea>
+            ) : (
+              <>
+                <CaseGroup
+                  title="In Progress"
+                  cases={groupedCases.inProgress}
+                  selectedCaseId={selectedCaseId}
+                  onSelectCase={onSelectCase}
+                  defaultOpen={true}
+                  icon={Clock}
+                />
+                
+                <CaseGroup
+                  title="Pending Approval"
+                  cases={groupedCases.pending}
+                  selectedCaseId={selectedCaseId}
+                  onSelectCase={onSelectCase}
+                  defaultOpen={true}
+                  icon={CircleDot}
+                />
+                
+                <CaseGroup
+                  title="Approved"
+                  cases={groupedCases.approved}
+                  selectedCaseId={selectedCaseId}
+                  onSelectCase={onSelectCase}
+                  defaultOpen={false}
+                  icon={CheckCircle2}
+                />
+                
+                <CaseGroup
+                  title="Declined"
+                  cases={groupedCases.declined}
+                  selectedCaseId={selectedCaseId}
+                  onSelectCase={onSelectCase}
+                  defaultOpen={false}
+                  icon={XCircle}
+                />
+              </>
+            )}
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   )
 }
