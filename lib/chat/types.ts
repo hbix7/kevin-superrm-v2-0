@@ -137,6 +137,7 @@ export interface CollectedProspectData {
   financingPurpose?: string
   requestedLoanAmount?: number
   directorName?: string
+  documents?: CollectedDocuments
 }
 
 export interface ChatSession {
@@ -196,3 +197,52 @@ export const FINANCING_PURPOSES = [
   { label: 'Property Purchase', value: 'Property Purchase' },
   { label: 'Other', value: 'Other' },
 ]
+
+// Required documents for credit assessment
+export interface RequiredDocument {
+  id: string
+  name: string
+  description: string
+  category: 'financial' | 'registry' | 'credit' | 'internal'
+  required: boolean
+  uploaded?: boolean
+  fileName?: string
+}
+
+export const REQUIRED_DOCUMENTS: RequiredDocument[] = [
+  // Financial Documents
+  { id: 'audited-fs', name: 'Audited Financial Statements', description: 'Last 2-3 years of audited accounts', category: 'financial', required: true },
+  { id: 'management-accounts', name: 'Management Accounts', description: 'Latest management accounts / interim financials', category: 'financial', required: true },
+  { id: 'bank-statements', name: 'Bank Statements', description: 'Last 6-12 months of bank statements', category: 'financial', required: true },
+  { id: 'banking-facilities', name: 'Existing Banking Facilities', description: 'Current facility letters and loan schedules', category: 'financial', required: false },
+  
+  // Related Party / ICA
+  { id: 'ica-model', name: 'ICA Financial Model', description: 'Inter-company account reconciliation and financial model', category: 'financial', required: false },
+  { id: 'rp-bank-statements', name: 'Related Party Bank Statements', description: 'Bank statements for related entities', category: 'financial', required: false },
+  
+  // Credit Reports
+  { id: 'ctos-report', name: 'CTOS Report', description: 'Full CTOS company and director report', category: 'credit', required: true },
+  { id: 'ccris-report', name: 'CCRIS Report', description: 'BNM CCRIS credit report', category: 'credit', required: true },
+  { id: 'ctos-lite', name: 'CTOS Lite', description: 'Quick CTOS snapshot for preliminary review', category: 'credit', required: false },
+  
+  // Registry Documents
+  { id: 'ssm-roc', name: 'SSM / ROC Registry', description: 'Company profile from SSM / ROC', category: 'registry', required: true },
+  { id: 'google-search', name: 'Google Search Results', description: 'Background search on company and directors', category: 'registry', required: false },
+  
+  // Internal Checks
+  { id: 'internal-blacklist', name: 'Internal Blacklist Check', description: 'Verification against internal blacklist database', category: 'internal', required: true },
+]
+
+export interface DocumentUploadState {
+  documents: RequiredDocument[]
+  allRequiredUploaded: boolean
+}
+
+export interface CollectedDocuments {
+  [documentId: string]: {
+    uploaded: boolean
+    fileName?: string
+    fileSize?: number
+    uploadedAt?: Date
+  }
+}

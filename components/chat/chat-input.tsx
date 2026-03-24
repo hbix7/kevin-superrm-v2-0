@@ -8,16 +8,20 @@ import { cn } from '@/lib/utils'
 
 interface ChatInputProps {
   onSend: (message: string, attachments?: File[]) => void
+  onFileUpload?: (files: File[]) => void
   placeholder?: string
   disabled?: boolean
   showAttachments?: boolean
+  currentStage?: string
 }
 
 export function ChatInput({ 
   onSend, 
+  onFileUpload,
   placeholder = 'Type your message...', 
   disabled = false,
-  showAttachments = false 
+  showAttachments = true,
+  currentStage,
 }: ChatInputProps) {
   const [message, setMessage] = useState('')
   const [attachments, setAttachments] = useState<File[]>([])
@@ -51,7 +55,13 @@ export function ChatInput({
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setAttachments([...attachments, ...Array.from(e.target.files)])
+      const files = Array.from(e.target.files)
+      setAttachments([...attachments, ...files])
+      
+      // Also trigger the file upload callback if provided
+      if (onFileUpload && files.length > 0) {
+        onFileUpload(files)
+      }
     }
   }
 

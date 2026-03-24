@@ -5,9 +5,11 @@ import type {
   CollectedProspectData,
   ScreeningResultCard,
   UnderwritingResultCard,
-  NarrativePreviewCard
+  NarrativePreviewCard,
+  RequiredDocument,
+  CollectedDocuments
 } from './types'
-import { INDUSTRIES, FINANCING_PURPOSES } from './types'
+import { INDUSTRIES, FINANCING_PURPOSES, REQUIRED_DOCUMENTS } from './types'
 import type { Prospect, ScreeningResult, UnderwritingResult, CreditNarrative } from '../types'
 
 // Conversation flow definition
@@ -261,7 +263,7 @@ export class ConversationEngine {
     return {
       message: `Excellent! Here's a summary of the prospect information:\n\nCompany: ${data.companyName}\nRegistration: ${data.registrationNumber}\nIndustry: ${data.industry}\nYears Operating: ${data.yearsOfOperation}\nAnnual Turnover: MYR ${data.estimatedTurnover?.toLocaleString()}\nLoan Requested: MYR ${data.requestedLoanAmount?.toLocaleString()}\nPurpose: ${data.financingPurpose}\nDirector: ${data.directorName}\n\nIs this information correct?`,
       actions: [
-        { id: generateId(), label: 'Yes, Run Screening', type: 'run-screening', variant: 'default' },
+        { id: generateId(), label: 'Yes, Continue', type: 'confirm', variant: 'default' },
         { id: generateId(), label: 'Make Changes', type: 'edit', variant: 'outline' },
       ],
       metadata: {
@@ -272,8 +274,135 @@ export class ConversationEngine {
           stage: 'client-info',
         },
       },
-      nextStage: 'screening',
+      nextStage: 'documents',
     }
+  }
+  
+  // Get document collection prompt
+  getDocumentCollectionPrompt(): ConversationResponse {
+    const financialDocs = REQUIRED_DOCUMENTS.filter(d => d.category === 'financial')
+    const creditDocs = REQUIRED_DOCUMENTS.filter(d => d.category === 'credit')
+    const registryDocs = REQUIRED_DOCUMENTS.filter(d => d.category === 'registry')
+    const internalDocs = REQUIRED_DOCUMENTS.filter(d => d.category === 'internal')
+    
+    const formatDocList = (docs: RequiredDocument[]) => 
+      docs.map(d => `${d.required ? '* ' : '  '}${d.name}`).join('\n')
+    
+    return {
+      message: `Now I need some supporting documents to proceed with the credit assessment.\n\nPlease upload the following:\n\n**Financial Documents:**\n${formatDocList(financialDocs)}\n\n**Credit Reports:**\n${formatDocList(creditDocs)}\n\n**Registry Documents:**\n${formatDocList(registryDocs)}\n\n**Internal Checks:**\n${formatDocList(internalDocs)}\n\n(* indicates required documents)\n\nYou can upload files using the attachment button below, or skip optional documents if not available.`,
+      actions: [
+        { id: generateId(), label: 'Upload Documents', type: 'upload-documents', variant: 'default' },
+        { id: generateId(), label: 'Skip Optional Docs', type: 'confirm', variant: 'outline' },
+      ],
+      metadata: {
+        progress: {
+          currentStage: 'documents',
+          completedStages: ['client-info'],
+          percentage: 20,
+        },
+      },
+      nextStage: 'documents',
+    }
+  }
+  
+  // Process document upload
+  processDocumentUpload(documentId: string, fileName: string, fileSize?: number): ConversationResponse {
+    if (!this.collectedData.documents) {
+      this.collectedData.documents = {}
+    }
+    
+    this.collectedData.documents[documentId] = {
+      uploaded: true,
+      fileName,
+      fileSize,
+      uploadedAt: new Date(),
+    }
+    
+    const uploadedCount = Object.keys(this.collectedData.documents).filter(
+      id => this.collectedData.documents![id].uploaded
+    ).length
+    
+    const requiredDocs = REQUIRED_DOCUMENTS.filter(d => d.required)
+    const uploadedRequired = requiredDocs.filter(
+      d => this.collectedData.documents?.[d.id]?.uploaded
+    ).length
+    
+    const docInfo = REQUIRED_DOCUMENTS.find(d => d.id === documentId)
+    
+    if (uploadedRequired >= requiredDocs.length) {
+      return {
+        message: `${docInfo?.name || 'Document'} uploaded successfully!\n\nAll required documents have been uploaded. You've uploaded ${uploadedCount} document(s) in total.\n\nWould you like to proceed with the AI screening?`,
+        actions: [
+          { id: generateId(), label: 'Run AI Screening', type: 'run-screening', variant: 'default' },
+          { id: generateId(), label: 'Upload More Documents', type: 'upload-documents', variant: 'outline' },
+        ],
+        nextStage: 'documents',
+      }
+    }
+    
+    const remaining = requiredDocs.filter(
+      d => !this.collectedData.documents?.[d.id]?.uploaded
+    )
+    
+    return {
+      message: `${docInfo?.name || 'Document'} uploaded successfully!\n\nStill needed (${remaining.length} required):\n${remaining.map(d => `- ${d.name}`).join('\n')}\n\nPlease continue uploading the required documents.`,
+      actions: [
+        { id: generateId(), label: 'Upload Next Document', type: 'upload-documents', variant: 'default' },
+      ],
+      nextStage: 'documents',
+    }
+  }
+  
+  // Get document status summary
+  getDocumentStatusSummary(): ConversationResponse {
+    const docs = this.collectedData.documents || {}
+    const uploadedDocs = REQUIRED_DOCUMENTS.filter(d => docs[d.id]?.uploaded)
+    const pendingRequired = REQUIRED_DOCUMENTS.filter(d => d.required && !docs[d.id]?.uploaded)
+    const pendingOptional = REQUIRED_DOCUMENTS.filter(d => !d.required && !docs[d.id]?.uploaded)
+    
+    let message = `**Document Upload Status:**\n\n`
+    
+    if (uploadedDocs.length > 0) {
+      message += `**Uploaded (${uploadedDocs.length}):**\n${uploadedDocs.map(d => `- ${d.name} (${docs[d.id]?.fileName})`).join('\n')}\n\n`
+    }
+    
+    if (pendingRequired.length > 0) {
+      message += `**Required - Pending (${pendingRequired.length}):**\n${pendingRequired.map(d => `- ${d.name}`).join('\n')}\n\n`
+    }
+    
+    if (pendingOptional.length > 0) {
+      message += `**Optional - Pending (${pendingOptional.length}):**\n${pendingOptional.map(d => `- ${d.name}`).join('\n')}\n\n`
+    }
+    
+    const canProceed = pendingRequired.length === 0
+    
+    if (canProceed) {
+      message += `All required documents uploaded. Ready to proceed with screening.`
+    } else {
+      message += `Please upload the remaining required documents to proceed.`
+    }
+    
+    const actions: QuickAction[] = canProceed
+      ? [
+          { id: generateId(), label: 'Run AI Screening', type: 'run-screening', variant: 'default' },
+          { id: generateId(), label: 'Upload More', type: 'upload-documents', variant: 'outline' },
+        ]
+      : [
+          { id: generateId(), label: 'Upload Documents', type: 'upload-documents', variant: 'default' },
+        ]
+    
+    return {
+      message,
+      actions,
+      nextStage: 'documents',
+    }
+  }
+  
+  // Check if required documents are uploaded
+  areRequiredDocumentsUploaded(): boolean {
+    const docs = this.collectedData.documents || {}
+    const requiredDocs = REQUIRED_DOCUMENTS.filter(d => d.required)
+    return requiredDocs.every(d => docs[d.id]?.uploaded)
   }
   
   // Prepare for screening

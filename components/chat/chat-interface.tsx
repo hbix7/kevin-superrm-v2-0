@@ -160,6 +160,23 @@ export function ChatInterface() {
         }
         break
       
+      case 'confirm':
+        // After client info confirmation, move to document collection
+        if (currentStage === 'client-info' || currentStage === 'documents') {
+          engine.updateData(session?.collectedData || {})
+          response = engine.getDocumentCollectionPrompt()
+          setStage('documents')
+        } else {
+          response = {
+            message: "Got it. Let's proceed.",
+          }
+        }
+        break
+      
+      case 'upload-documents':
+        response = engine.getDocumentStatusSummary()
+        break
+      
       case 'run-screening':
         // Show loading message
         addMessage({
@@ -536,6 +553,69 @@ export function ChatInterface() {
     }
   }
   
+  // Handle file uploads for document collection
+  const handleFileUpload = useCallback((files: File[]) => {
+    if (currentStage !== 'documents') return
+    
+    engine.updateData(session?.collectedData || {})
+    
+    // Process each uploaded file
+    files.forEach((file) => {
+      // Try to match file to a document type based on name
+      const fileName = file.name.toLowerCase()
+      let documentId = 'other'
+      
+      if (fileName.includes('audit') || fileName.includes('financial statement')) {
+        documentId = 'audited-fs'
+      } else if (fileName.includes('management') || fileName.includes('interim')) {
+        documentId = 'management-accounts'
+      } else if (fileName.includes('bank statement')) {
+        documentId = 'bank-statements'
+      } else if (fileName.includes('facility') || fileName.includes('loan')) {
+        documentId = 'banking-facilities'
+      } else if (fileName.includes('ica') || fileName.includes('inter-company')) {
+        documentId = 'ica-model'
+      } else if (fileName.includes('ctos') && !fileName.includes('lite')) {
+        documentId = 'ctos-report'
+      } else if (fileName.includes('ccris')) {
+        documentId = 'ccris-report'
+      } else if (fileName.includes('ctos lite') || fileName.includes('ctoslite')) {
+        documentId = 'ctos-lite'
+      } else if (fileName.includes('ssm') || fileName.includes('roc') || fileName.includes('registry')) {
+        documentId = 'ssm-roc'
+      } else if (fileName.includes('blacklist')) {
+        documentId = 'internal-blacklist'
+      }
+      
+      // Update engine with the document
+      const response = engine.processDocumentUpload(documentId, file.name, file.size)
+      updateCollectedData(engine.getData())
+      
+      // Add message about the upload
+      addMessage({
+        role: 'user',
+        content: `Uploaded: ${file.name}`,
+        stage: 'documents',
+        attachments: [{
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+        }],
+      })
+      
+      // Add assistant response
+      setTimeout(() => {
+        addMessage({
+          role: 'assistant',
+          content: response.message,
+          actions: response.actions,
+          stage: response.nextStage,
+        })
+      }, 300)
+    })
+  }, [currentStage, engine, session?.collectedData, updateCollectedData, addMessage])
+  
   // Handle new chat
   const handleNewChat = useCallback(() => {
     const sessionId = createSession()
@@ -615,8 +695,10 @@ export function ChatInterface() {
         {/* Input */}
         <ChatInput
           onSend={handleSendMessage}
+          onFileUpload={handleFileUpload}
           placeholder={getPlaceholderForStage(currentStage)}
-          showAttachments={currentStage === 'documents'}
+          showAttachments={true}
+          currentStage={currentStage}
         />
       </div>
       
@@ -639,6 +721,8 @@ function getPlaceholderForStage(stage: JourneyStage): string {
       return "Tell me what you'd like to do..."
     case 'client-info':
       return "Enter the information requested..."
+    case 'documents':
+      return "Upload documents using the attachment button or type a message..."
     case 'screening':
     case 'underwriting':
     case 'narrative':
