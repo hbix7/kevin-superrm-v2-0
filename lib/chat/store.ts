@@ -252,6 +252,37 @@ export const useChatStore = create<ChatStore>()(
         sessions: state.sessions,
         activeSessionId: state.activeSessionId,
       }),
+      // Handle Date serialization
+      storage: {
+        getItem: (name) => {
+          const str = localStorage.getItem(name)
+          if (!str) return null
+          const parsed = JSON.parse(str)
+          // Revive Date objects in sessions
+          if (parsed.state?.sessions) {
+            Object.keys(parsed.state.sessions).forEach((key) => {
+              const session = parsed.state.sessions[key]
+              if (session) {
+                session.createdAt = new Date(session.createdAt)
+                session.updatedAt = new Date(session.updatedAt)
+                if (session.messages) {
+                  session.messages = session.messages.map((m: ChatMessage) => ({
+                    ...m,
+                    timestamp: new Date(m.timestamp),
+                  }))
+                }
+              }
+            })
+          }
+          return parsed
+        },
+        setItem: (name, value) => {
+          localStorage.setItem(name, JSON.stringify(value))
+        },
+        removeItem: (name) => {
+          localStorage.removeItem(name)
+        },
+      },
     }
   )
 )

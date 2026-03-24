@@ -1,6 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { CaseData, WorkflowStage, Prospect, ScreeningResult, UnderwritingResult, CreditNarrative } from './types'
 import { mockCaseData, mockScreeningResult, mockUnderwritingResult, mockCreditNarrative } from './mock-data'
 
@@ -318,15 +319,17 @@ interface DashboardState {
   submitToCredit: () => Promise<void>
 }
 
-export const useDashboardStore = create<DashboardState>((set, get) => ({
-  cases: initialCases,
-  caseData: null,
-  currentStage: 'screening',
-  currentCaseId: null,
-  isLoading: false,
-  aiCopilotOpen: false,
-  settingsOpen: false,
-  settings: defaultSettings,
+export const useDashboardStore = create<DashboardState>()(
+  persist(
+    (set, get) => ({
+      cases: initialCases,
+      caseData: null,
+      currentStage: 'screening',
+      currentCaseId: null,
+      isLoading: false,
+      aiCopilotOpen: false,
+      settingsOpen: false,
+      settings: defaultSettings,
 
   getCaseById: (id: string) => {
     return get().cases.find(c => c.id === id)
@@ -671,4 +674,65 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       set({ isLoading: false })
     }
   },
-}))
+    }),
+    {
+      name: 'dashboard-store',
+      partialize: (state) => ({
+        cases: state.cases,
+        caseData: state.caseData,
+        currentStage: state.currentStage,
+        currentCaseId: state.currentCaseId,
+        settings: state.settings,
+      }),
+      // Handle Date serialization
+      storage: {
+        getItem: (name) => {
+          const str = localStorage.getItem(name)
+          if (!str) return null
+          const parsed = JSON.parse(str)
+          // Revive Date objects
+          if (parsed.state) {
+            if (parsed.state.cases) {
+              parsed.state.cases = parsed.state.cases.map((c: CaseListItem) => ({
+                ...c,
+                createdAt: new Date(c.createdAt),
+                lastUpdated: new Date(c.lastUpdated),
+                caseData: c.caseData ? {
+                  ...c.caseData,
+                  prospect: c.caseData.prospect ? {
+                    ...c.caseData.prospect,
+                    createdAt: new Date(c.caseData.prospect.createdAt),
+                  } : undefined,
+                  timeline: c.caseData.timeline?.map((t: { id: string; action: string; timestamp: Date | string; user: string }) => ({
+                    ...t,
+                    timestamp: new Date(t.timestamp),
+                  })) || [],
+                } : undefined,
+              }))
+            }
+            if (parsed.state.caseData) {
+              parsed.state.caseData = {
+                ...parsed.state.caseData,
+                prospect: parsed.state.caseData.prospect ? {
+                  ...parsed.state.caseData.prospect,
+                  createdAt: new Date(parsed.state.caseData.prospect.createdAt),
+                } : undefined,
+                timeline: parsed.state.caseData.timeline?.map((t: { id: string; action: string; timestamp: Date | string; user: string }) => ({
+                  ...t,
+                  timestamp: new Date(t.timestamp),
+                })) || [],
+              }
+            }
+          }
+          return parsed
+        },
+        setItem: (name, value) => {
+          localStorage.setItem(name, JSON.stringify(value))
+        },
+        removeItem: (name) => {
+          localStorage.removeItem(name)
+        },
+      },
+    }
+  )
+)
