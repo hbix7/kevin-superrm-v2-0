@@ -7,8 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Super RM - AI Augmented Relationship Manager',
-  description: 'AI-powered credit screening and underwriting platform for Relationship Managers',
+  title: 'Super RM Assistant - AI-Guided Credit Assessment',
+  description: 'Conversational AI assistant for credit screening, underwriting, and narrative generation',
   generator: 'v0.app',
   icons: {
     icon: [
