@@ -156,8 +156,10 @@ export function ChatContextPanel({
         </div>
       </div>
       
-      <ScrollArea className="flex-1">
-        <Tabs defaultValue="info" className="p-4">
+      {/* Scrollable content area */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="h-full">
+          <Tabs defaultValue="info" className="p-4">
           <TabsList className="w-full">
             <TabsTrigger value="info" className="flex-1">Info</TabsTrigger>
             <TabsTrigger value="docs" className="flex-1">Docs</TabsTrigger>
@@ -345,7 +347,8 @@ export function ChatContextPanel({
             )}
           </TabsContent>
         </Tabs>
-      </ScrollArea>
+        </ScrollArea>
+      </div>
     </div>
   )
 }
