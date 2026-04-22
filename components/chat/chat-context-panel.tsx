@@ -94,7 +94,6 @@ export function ChatContextPanel({
 }: ChatContextPanelProps) {
   const progress = stageProgress[currentStage]
   const prospect = caseData?.prospect
-  const hasData = prospect || (collectedData && Object.keys(collectedData).length > 0)
   
   // Merge collected data with prospect data
   const displayData = {
@@ -107,6 +106,11 @@ export function ChatContextPanel({
     directorName: prospect?.directorName || collectedData?.directorName,
     financingPurpose: prospect?.financingPurpose || collectedData?.financingPurpose,
   }
+  
+  // Check if we actually have any meaningful data to display (not just empty object)
+  const hasAnyDisplayData = Object.values(displayData).some(v => v !== undefined && v !== null && v !== '')
+  const isEarlyStage = currentStage === 'welcome' || currentStage === 'intent'
+  const hasData = !isEarlyStage && (prospect || hasAnyDisplayData)
 
   if (!isOpen) {
     return (
@@ -170,8 +174,13 @@ export function ChatContextPanel({
             {!hasData ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No case data yet</p>
-                <p className="text-xs">Start a conversation to begin</p>
+                <p className="text-sm">No case information</p>
+                <p className="text-xs mt-1">
+                  {isEarlyStage 
+                    ? "Start a new assessment to begin collecting client data"
+                    : "Case details will appear here as you progress"
+                  }
+                </p>
               </div>
             ) : (
               <>
