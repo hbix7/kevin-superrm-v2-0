@@ -147,8 +147,75 @@ export function ChatInterface() {
         break
       
       case 'view-cases':
-        response = {
-          message: "You can see all your cases in the sidebar. Click on any case to view its details.",
+        // Show contextual information based on current stage instead of generic sidebar message
+        const currentCaseContext = useDashboardStore.getState().caseData
+        if (currentCaseContext?.underwritingResult) {
+          // Show underwriting details
+          const uw = currentCaseContext.underwritingResult
+          let detailsMessage = `**Financial Analysis Details**\n\n`
+          detailsMessage += `**Overall Score:** ${uw.overallScore} | **Confidence:** ${uw.confidenceScore}%\n\n`
+          
+          uw.categories.forEach((cat: any) => {
+            const statusIcon = cat.status === 'low' ? '\u2705' : cat.status === 'medium' ? '\u26A0\uFE0F' : '\u274C'
+            detailsMessage += `${statusIcon} **${cat.name}:** ${cat.score}/100\n`
+            if (cat.explanation) {
+              detailsMessage += `   ${cat.explanation}\n`
+            }
+            if (cat.checks) {
+              cat.checks.forEach((check: any) => {
+                const checkIcon = check.status === 'clear' ? '\u2713' : '\u2022'
+                detailsMessage += `   ${checkIcon} ${check.name}: ${check.value} (${check.benchmark})\n`
+              })
+            }
+            detailsMessage += `\n`
+          })
+          
+          response = {
+            message: detailsMessage,
+            actions: [
+              { id: `${Date.now()}-narrative`, label: 'Generate Narrative', type: 'generate-narrative' as const, variant: 'default' as const },
+              { id: `${Date.now()}-save-draft`, label: 'Save as Draft', type: 'save-to-db' as const, variant: 'outline' as const, value: JSON.stringify({
+                clientName: currentCaseContext.prospect?.companyName,
+                screeningDate: new Date().toISOString(),
+                fullNarrative: { underwritingResult: uw },
+                caseId: session?.caseId,
+              }) },
+            ],
+          }
+        } else if (currentCaseContext?.creditNarrative) {
+          // Show full narrative details
+          const narrative = currentCaseContext.creditNarrative
+          let narrativeMessage = `**Full Credit Narrative**\n\n`
+          narrativeMessage += `**Business Profile**\n`
+          narrativeMessage += `${narrative.businessProfile.background}\n\n`
+          narrativeMessage += `**Industry Context:** ${narrative.businessProfile.industryContext}\n\n`
+          narrativeMessage += `**Business Model:** ${narrative.businessProfile.businessModel}\n\n`
+          narrativeMessage += `**Financial Assessment**\n`
+          narrativeMessage += `${narrative.financialAssessment.revenueTrends}\n\n`
+          narrativeMessage += `**Profitability:** ${narrative.financialAssessment.profitabilityAnalysis}\n\n`
+          narrativeMessage += `**Repayment Capacity:** ${narrative.financialAssessment.repaymentCapacity}\n\n`
+          narrativeMessage += `**Risk Assessment**\n`
+          narrativeMessage += `Key Risks:\n${narrative.riskAssessment.keyRisks.map((r: string) => `- ${r}`).join('\n')}\n\n`
+          narrativeMessage += `Mitigants:\n${narrative.riskAssessment.mitigants.map((m: string) => `- ${m}`).join('\n')}\n\n`
+          narrativeMessage += `**Facility Structure**\n`
+          narrativeMessage += `- Amount: MYR ${narrative.facilityStructure.recommendedAmount.toLocaleString()}\n`
+          narrativeMessage += `- Tenure: ${narrative.facilityStructure.tenure}\n`
+          narrativeMessage += `- Collateral: ${narrative.facilityStructure.collateral}\n`
+          narrativeMessage += `- Guarantees: ${narrative.facilityStructure.guarantees}\n\n`
+          narrativeMessage += `**Recommendation:** ${narrative.recommendation} (${narrative.confidenceScore}% confidence)\n`
+          narrativeMessage += `\n${narrative.reasoning}`
+          
+          response = {
+            message: narrativeMessage,
+            actions: [
+              { id: `${Date.now()}-submit`, label: 'Submit for Approval', type: 'submit-approval' as const, variant: 'default' as const },
+              { id: `${Date.now()}-edit`, label: 'Edit Narrative', type: 'edit-narrative' as const, variant: 'outline' as const },
+            ],
+          }
+        } else {
+          response = {
+            message: "No detailed analysis available yet. Please complete the screening and underwriting steps first.",
+          }
         }
         break
       
@@ -276,13 +343,75 @@ export function ChatInterface() {
         // Show loading message
         addMessage({
           role: 'assistant',
-          content: "Performing comprehensive financial analysis...",
+          content: "Performing comprehensive financial analysis based on uploaded documents...",
           metadata: { isLoading: true },
           stage: 'underwriting',
         })
         setStage('underwriting')
         
-        await runUnderwriting()
+        try {
+          // Get uploaded documents from session
+          const uploadedDocs = session?.collectedData?.documents || {}
+          const currentProspect = useDashboardStore.getState().caseData?.prospect
+          const currentScreening = useDashboardStore.getState().caseData?.screeningResult
+          
+          // Call underwriting API with documents context
+          const uwResponse = await fetch('/api/underwriting', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prospect: currentProspect,
+              screeningResult: currentScreening,
+              documents: uploadedDocs,
+            }),
+          })
+          
+          if (uwResponse.ok) {
+            const reader = uwResponse.body?.getReader()
+            if (reader) {
+              const decoder = new TextDecoder()
+              let buffer = ''
+              
+              while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+                
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split('\n')
+                buffer = lines.pop() || ''
+                
+                for (const line of lines) {
+                  const trimmed = line.trim()
+                  if (trimmed.startsWith('data:')) {
+                    const data = trimmed.slice(5).trim()
+                    if (data === '[DONE]') continue
+                    try {
+                      const parsed = JSON.parse(data)
+                      if (parsed.type === 'output' && parsed.output) {
+                        // Update store with underwriting result
+                        useDashboardStore.setState((state) => {
+                          if (!state.caseData) return state
+                          return {
+                            caseData: {
+                              ...state.caseData,
+                              underwritingResult: parsed.output,
+                            },
+                          }
+                        })
+                      }
+                    } catch {
+                      // Skip invalid JSON
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Underwriting API error:', error)
+          // Fallback to store method
+          await runUnderwriting()
+        }
         
         const uwCase = useDashboardStore.getState().caseData
         if (uwCase?.underwritingResult) {

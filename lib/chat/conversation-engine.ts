@@ -55,11 +55,11 @@ export function underwritingToCard(result: UnderwritingResult): UnderwritingResu
   }
 }
 
-// Convert narrative to preview card format
+// Convert narrative to preview card format - no truncation for full display
 export function narrativeToCard(narrative: CreditNarrative): NarrativePreviewCard {
   return {
-    businessProfile: narrative.businessProfile.background.substring(0, 200) + '...',
-    financialSummary: narrative.financialAssessment.revenueTrends.substring(0, 200) + '...',
+    businessProfile: narrative.businessProfile.background,
+    financialSummary: narrative.financialAssessment.revenueTrends,
     recommendation: narrative.recommendation,
     confidenceScore: narrative.confidenceScore,
   }
@@ -110,14 +110,17 @@ export class ConversationEngine {
     
     if (lowerIntent.includes('resume') || lowerIntent.includes('continue') || lowerIntent.includes('existing')) {
       return {
-        message: "Sure! You can select a case from the sidebar on the left, or tell me the company name or case ID you'd like to resume.",
+        message: "Sure! Please provide the company name or case ID you'd like to resume, or start a new assessment.",
+        actions: [
+          { id: generateId(), label: 'Start New Case', type: 'start-new-case', variant: 'default' },
+        ],
         nextStage: 'intent',
       }
     }
     
     if (lowerIntent.includes('view') || lowerIntent.includes('all') || lowerIntent.includes('list')) {
       return {
-        message: "You can see all your cases in the sidebar on the left. Click on any case to view its details and continue working on it.\n\nOr would you like to start a new assessment?",
+        message: "To view your cases, please provide the company name or case ID. Alternatively, you can start a new credit assessment.",
         actions: [
           { id: generateId(), label: 'Start New Case', type: 'start-new-case', variant: 'default' },
         ],
@@ -482,7 +485,6 @@ export class ConversationEngine {
         message: `**Step ${step.stepNumber}: ${step.title}** - Selected: ${chip.label}\n\n❌ **DROP CASE**\n\n${chip.probeMessage}\n\nThis case cannot proceed further due to a prohibited classification.`,
         actions: [
           { id: generateId(), label: 'Start New Case', type: 'start-new-case', variant: 'default' },
-          { id: generateId(), label: 'View All Cases', type: 'view-cases', variant: 'outline' },
         ],
         nextStage: 'screening',
       }
@@ -577,7 +579,7 @@ export class ConversationEngine {
     ]
     
     if (probeCount > 0) {
-      actions.push({ id: generateId(), label: 'Review Probe Items', type: 'view-cases', variant: 'outline' })
+      actions.push({ id: generateId(), label: 'Review Probe Items', type: 'screening-add-notes', variant: 'outline' })
     }
     
     return {
@@ -640,7 +642,7 @@ export class ConversationEngine {
     if (recommendation === 'proceed' || recommendation === 'probe') {
       actions.push({ id: generateId(), label: 'Proceed to Underwriting', type: 'proceed-underwriting', variant: 'default' })
     }
-    actions.push({ id: generateId(), label: 'View Detailed Results', type: 'view-cases', variant: 'outline' })
+    actions.push({ id: generateId(), label: 'View Detailed Results', type: 'view-cases', variant: 'outline' }) // Will show inline details
     
     return {
       message,
@@ -665,13 +667,19 @@ export class ConversationEngine {
   
   // Underwriting complete
   getUnderwritingComplete(result: UnderwritingResult): ConversationResponse {
-    const message = `Financial analysis complete!\n\nOverall score: ${result.overallScore} with ${result.confidenceScore}% confidence.\n\nKey findings across ${result.categories.length} assessment categories have been evaluated. The analysis shows the company's financial health and repayment capacity.\n\nWould you like me to generate a credit narrative for approval?`
+    // Include document analysis note if available
+    const docNote = (result as any).documentAnalysis?.analysisNotes 
+      ? `\n\n${(result as any).documentAnalysis.analysisNotes}`
+      : ''
+    
+    const message = `Financial analysis complete!\n\nOverall score: ${result.overallScore} with ${result.confidenceScore}% confidence.\n\nKey findings across ${result.categories.length} assessment categories have been evaluated. The analysis shows the company's financial health and repayment capacity.${docNote}\n\nYou can view the full analysis details or generate a credit narrative for approval.`
     
     return {
       message,
       actions: [
-        { id: generateId(), label: 'Generate Narrative', type: 'generate-narrative', variant: 'default' },
         { id: generateId(), label: 'View Analysis Details', type: 'view-cases', variant: 'outline' },
+        { id: generateId(), label: 'Generate Narrative', type: 'generate-narrative', variant: 'default' },
+        { id: generateId(), label: 'Save as Draft', type: 'confirm', variant: 'outline' },
       ],
       metadata: {
         underwritingResult: underwritingToCard(result),
@@ -703,12 +711,13 @@ export class ConversationEngine {
     return {
       message: `Credit narrative generated!\n\nRecommendation: ${recLabel}\nConfidence: ${narrative.confidenceScore}%\n\n${narrative.reasoning}\n\nYou can review the full narrative, make edits if needed, and submit for approval.`,
       actions: [
-        { id: generateId(), label: 'Submit for Approval', type: 'submit-approval', variant: 'default' },
-        { id: generateId(), label: 'Edit Narrative', type: 'edit-narrative', variant: 'outline' },
         { id: generateId(), label: 'View Full Narrative', type: 'view-cases', variant: 'outline' },
+        { id: generateId(), label: 'Edit Narrative', type: 'edit-narrative', variant: 'outline' },
+        { id: generateId(), label: 'Submit for Approval', type: 'submit-approval', variant: 'default' },
       ],
       metadata: {
         narrativePreview: narrativeToCard(narrative),
+        fullNarrative: narrative,
       },
       nextStage: 'narrative-results',
     }
@@ -717,10 +726,9 @@ export class ConversationEngine {
   // Submit for approval
   getSubmissionConfirmation(): ConversationResponse {
     return {
-      message: "The credit narrative has been submitted to the Credit Committee for approval.\n\nYou'll receive a notification once a decision has been made. In the meantime, you can:\n\n- Start a new assessment\n- Review other pending cases\n- Check the status of this submission",
+      message: "The credit narrative has been submitted to the Credit Committee for approval.\n\nYou'll receive a notification once a decision has been made. Would you like to start a new credit assessment?",
       actions: [
         { id: generateId(), label: 'Start New Case', type: 'start-new-case', variant: 'default' },
-        { id: generateId(), label: 'View All Cases', type: 'view-cases', variant: 'outline' },
       ],
       metadata: {
         progress: {
