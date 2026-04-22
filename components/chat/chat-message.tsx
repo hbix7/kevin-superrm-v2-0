@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -172,8 +173,68 @@ function UnderwritingResultCard({ result }: { result: NonNullable<ChatMessage['m
   )
 }
 
-function NarrativePreviewCard({ preview }: { preview: NonNullable<ChatMessage['metadata']>['narrativePreview'] }) {
+function NarrativePreviewCard({ 
+  preview, 
+  fullNarrative,
+  onActionClick,
+  caseId,
+  clientName,
+}: { 
+  preview: NonNullable<ChatMessage['metadata']>['narrativePreview']
+  fullNarrative?: any
+  onActionClick?: (action: QuickAction) => void
+  caseId?: string
+  clientName?: string
+}) {
+  const [showFullReport, setShowFullReport] = useState(false)
+  const [showEditMode, setShowEditMode] = useState(false)
+  const [editText, setEditText] = useState('')
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  
   if (!preview) return null
+  
+  const handleViewFullReport = () => {
+    setShowFullReport(!showFullReport)
+    setShowEditMode(false)
+  }
+  
+  const handleEditClick = () => {
+    setShowEditMode(true)
+    setShowFullReport(true)
+    setEditText('')
+  }
+  
+  const handleSaveToDb = () => {
+    if (onActionClick && caseId) {
+      const payload = {
+        clientName: clientName || 'Unknown Client',
+        screeningDate: new Date().toISOString(),
+        fullNarrative: fullNarrative || preview,
+        caseId,
+      }
+      onActionClick({
+        id: `${Date.now()}-save`,
+        label: 'Save to Database',
+        type: 'save-to-db',
+        value: JSON.stringify(payload),
+      })
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    }
+  }
+  
+  const handleSubmitEdit = () => {
+    if (onActionClick && editText.trim()) {
+      onActionClick({
+        id: `${Date.now()}-edit`,
+        label: 'Submit Edit',
+        type: 'submit-narrative-edit',
+        value: editText,
+      })
+      setShowEditMode(false)
+      setEditText('')
+    }
+  }
   
   return (
     <Card className="mt-3 border-primary/20 bg-gradient-to-br from-primary/5 to-background">
@@ -182,25 +243,160 @@ function NarrativePreviewCard({ preview }: { preview: NonNullable<ChatMessage['m
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
             <FileText className="h-5 w-5 text-primary" />
           </div>
-          <div>
+          <div className="flex-1">
             <h4 className="font-semibold text-foreground">Credit Narrative Generated</h4>
             <p className="text-sm text-muted-foreground">Confidence: {preview.confidenceScore}%</p>
           </div>
+          {saveSuccess && (
+            <Badge className="bg-success text-success-foreground">
+              <CheckCircle2 className="h-3 w-3 mr-1" />
+              Saved
+            </Badge>
+          )}
         </div>
         
-        <div className="space-y-3 text-sm">
-          <div>
-            <div className="font-medium text-foreground">Business Profile</div>
-            <p className="text-muted-foreground line-clamp-2">{preview.businessProfile}</p>
+        {!showFullReport ? (
+          <div className="space-y-3 text-sm">
+            <div>
+              <div className="font-medium text-foreground">Business Profile</div>
+              <p className="text-muted-foreground line-clamp-2">{preview.businessProfile}</p>
+            </div>
+            <div>
+              <div className="font-medium text-foreground">Financial Summary</div>
+              <p className="text-muted-foreground line-clamp-2">{preview.financialSummary}</p>
+            </div>
+            <div>
+              <div className="font-medium text-foreground">Recommendation</div>
+              <p className="text-muted-foreground">{preview.recommendation}</p>
+            </div>
           </div>
-          <div>
-            <div className="font-medium text-foreground">Financial Summary</div>
-            <p className="text-muted-foreground line-clamp-2">{preview.financialSummary}</p>
+        ) : (
+          <div className="space-y-4 text-sm">
+            {fullNarrative ? (
+              <>
+                <div>
+                  <div className="font-medium text-foreground mb-2">Business Profile - Background</div>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{fullNarrative.businessProfile?.background}</p>
+                </div>
+                <div>
+                  <div className="font-medium text-foreground mb-2">Industry Context</div>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{fullNarrative.businessProfile?.industryContext}</p>
+                </div>
+                <div>
+                  <div className="font-medium text-foreground mb-2">Business Model</div>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{fullNarrative.businessProfile?.businessModel}</p>
+                </div>
+                <div>
+                  <div className="font-medium text-foreground mb-2">Revenue Trends</div>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{fullNarrative.financialAssessment?.revenueTrends}</p>
+                </div>
+                <div>
+                  <div className="font-medium text-foreground mb-2">Profitability Analysis</div>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{fullNarrative.financialAssessment?.profitabilityAnalysis}</p>
+                </div>
+                <div>
+                  <div className="font-medium text-foreground mb-2">Repayment Capacity</div>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{fullNarrative.financialAssessment?.repaymentCapacity}</p>
+                </div>
+                <div>
+                  <div className="font-medium text-foreground mb-2">Key Risks</div>
+                  <ul className="text-muted-foreground space-y-1">
+                    {fullNarrative.riskAssessment?.keyRisks?.map((risk: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+                        {risk}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <div className="font-medium text-foreground mb-2">Risk Mitigants</div>
+                  <ul className="text-muted-foreground space-y-1">
+                    {fullNarrative.riskAssessment?.mitigants?.map((mitigant: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                        {mitigant}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <div className="font-medium text-foreground mb-2">Facility Structure</div>
+                  <div className="grid grid-cols-2 gap-2 text-muted-foreground">
+                    <div>Amount: MYR {fullNarrative.facilityStructure?.recommendedAmount?.toLocaleString()}</div>
+                    <div>Tenure: {fullNarrative.facilityStructure?.tenure}</div>
+                    <div>Collateral: {fullNarrative.facilityStructure?.collateral}</div>
+                    <div>Guarantees: {fullNarrative.facilityStructure?.guarantees}</div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <div className="font-medium text-foreground">Business Profile</div>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{preview.businessProfile}</p>
+                </div>
+                <div>
+                  <div className="font-medium text-foreground">Financial Summary</div>
+                  <p className="text-muted-foreground whitespace-pre-wrap">{preview.financialSummary}</p>
+                </div>
+                <div>
+                  <div className="font-medium text-foreground">Recommendation</div>
+                  <p className="text-muted-foreground">{preview.recommendation}</p>
+                </div>
+              </div>
+            )}
+            
+            {/* Edit mode textarea */}
+            {showEditMode && (
+              <div className="border-t border-border pt-4 mt-4">
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Please send a new edit
+                </label>
+                <textarea
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  placeholder="Enter your revised narrative here..."
+                  className="w-full min-h-[120px] p-3 text-sm border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <div className="flex gap-2 mt-2">
+                  <Button size="sm" onClick={handleSubmitEdit} disabled={!editText.trim()}>
+                    Submit Edit
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowEditMode(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+            
+            {/* Save prompt */}
+            {showFullReport && !showEditMode && (
+              <div className="border-t border-border pt-4 mt-4">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Would you like to save this report to the database?
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleSaveToDb}>
+                    Save to Database
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowFullReport(false)}>
+                    Not Now
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-          <div>
-            <div className="font-medium text-foreground">Recommendation</div>
-            <p className="text-muted-foreground">{preview.recommendation}</p>
-          </div>
+        )}
+        
+        {/* Action buttons */}
+        <div className="flex gap-2 mt-4 pt-3 border-t border-border">
+          <Button size="sm" variant="outline" onClick={handleViewFullReport}>
+            {showFullReport ? 'Hide Report' : 'View Full Report'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleEditClick}>
+            Edit
+          </Button>
         </div>
       </CardContent>
     </Card>
@@ -305,7 +501,13 @@ export function ChatMessageComponent({ message, onActionClick, isLast }: ChatMes
           <UnderwritingResultCard result={message.metadata.underwritingResult} />
         )}
         {message.metadata?.narrativePreview && (
-          <NarrativePreviewCard preview={message.metadata.narrativePreview} />
+          <NarrativePreviewCard 
+            preview={message.metadata.narrativePreview}
+            fullNarrative={message.metadata?.fullNarrative}
+            onActionClick={onActionClick}
+            caseId={message.caseId}
+            clientName={message.metadata?.caseSummary?.companyName}
+          />
         )}
         {message.metadata?.progress && (
           <ProgressCard progress={message.metadata.progress} />

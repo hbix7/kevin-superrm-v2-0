@@ -207,8 +207,67 @@ export function ChatInterface() {
           } else if (screeningState?.isComplete) {
             setStage('screening-results')
             
-            // Also run the backend screening to generate results for underwriting
-            await runScreening()
+            // Run backend screening with uploaded documents context
+            const documents = session?.collectedData?.documents
+            try {
+              const screeningPayload = {
+                prospect: useDashboardStore.getState().caseData?.prospect,
+                documents: documents || {},
+              }
+              
+              const screeningResponse = await fetch('/api/screening', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(screeningPayload),
+              })
+              
+              if (screeningResponse.ok) {
+                // Parse and update store
+                const reader = screeningResponse.body?.getReader()
+                if (reader) {
+                  const decoder = new TextDecoder()
+                  let buffer = ''
+                  
+                  while (true) {
+                    const { done, value } = await reader.read()
+                    if (done) break
+                    
+                    buffer += decoder.decode(value, { stream: true })
+                    const lines = buffer.split('\n')
+                    buffer = lines.pop() || ''
+                    
+                    for (const line of lines) {
+                      const trimmed = line.trim()
+                      if (trimmed.startsWith('data:')) {
+                        const data = trimmed.slice(5).trim()
+                        if (data === '[DONE]') continue
+                        try {
+                          const parsed = JSON.parse(data)
+                          if (parsed.type === 'output' && parsed.output) {
+                            // Update case with screening result
+                            useDashboardStore.setState((state) => {
+                              if (!state.caseData) return state
+                              return {
+                                caseData: {
+                                  ...state.caseData,
+                                  screeningResult: parsed.output,
+                                },
+                              }
+                            })
+                          }
+                        } catch {
+                          // Skip invalid JSON
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Screening API error:', error)
+              // Fallback to mock screening
+              await runScreening()
+            }
           }
         }
         break
@@ -377,6 +436,84 @@ export function ChatInterface() {
       case 'edit':
         response = {
           message: "Sure, let's make some changes. What would you like to update?\n\n- Company name\n- Registration number\n- Industry\n- Years of operation\n- Annual turnover\n- Loan amount\n- Financing purpose\n- Director name\n\nJust tell me what to change.",
+        }
+        break
+      
+      case 'view-full-report':
+        // Handled inside NarrativePreviewCard via local state toggle - no async needed
+        return
+      
+      case 'save-to-db':
+        // Save report to persistent storage
+        if (action.value) {
+          try {
+            const payload = JSON.parse(action.value)
+            const storageKey = `report:${payload.caseId}`
+            const reportData = {
+              clientName: payload.clientName,
+              screeningDate: payload.screeningDate,
+              fullNarrative: payload.fullNarrative,
+              savedAt: new Date().toISOString(),
+            }
+            
+            // Use localStorage for persistent storage
+            localStorage.setItem(storageKey, JSON.stringify(reportData))
+            
+            response = {
+              message: `Report for ${payload.clientName} has been saved to the database. Saved on ${new Date(payload.screeningDate).toLocaleDateString()}. You can retrieve it anytime.`,
+            }
+          } catch (error) {
+            console.error('Save to DB error:', error)
+            response = {
+              message: "There was an error saving the report. Please try again.",
+            }
+          }
+        }
+        break
+      
+      case 'submit-narrative-edit':
+        // Handle narrative edit submission
+        if (action.value) {
+          const currentCase = useDashboardStore.getState().caseData
+          if (currentCase?.creditNarrative) {
+            const updatedNarrative = {
+              ...currentCase.creditNarrative,
+              reasoning: action.value,
+              businessProfile: {
+                ...currentCase.creditNarrative.businessProfile,
+                background: action.value,
+              },
+            }
+            
+            useDashboardStore.setState((state) => {
+              if (!state.caseData) return state
+              return {
+                caseData: {
+                  ...state.caseData,
+                  creditNarrative: updatedNarrative,
+                },
+              }
+            })
+            
+            response = {
+              message: "Narrative updated successfully. Would you like to save this to the database?",
+              actions: [
+                { 
+                  id: `${Date.now()}-save`, 
+                  label: 'Save to Database', 
+                  type: 'save-to-db' as const, 
+                  variant: 'default' as const,
+                  value: JSON.stringify({
+                    clientName: currentCase.prospect?.companyName,
+                    screeningDate: new Date().toISOString(),
+                    fullNarrative: updatedNarrative,
+                    caseId: session?.caseId,
+                  }),
+                },
+                { id: `${Date.now()}-skip`, label: 'Not Now', type: 'confirm' as const, variant: 'outline' as const },
+              ],
+            }
+          }
         }
         break
       

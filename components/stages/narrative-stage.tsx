@@ -15,6 +15,8 @@ import {
   Edit3,
   Save,
   FileText,
+  X,
+  Maximize2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -119,6 +121,10 @@ export function NarrativeStage() {
   )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [showFullEditModal, setShowFullEditModal] = useState(false)
+  const [fullEditText, setFullEditText] = useState('')
+  const [showSavePrompt, setShowSavePrompt] = useState(false)
+  const [dbSaveSuccess, setDbSaveSuccess] = useState(false)
 
   // Update local narrative when case changes
   useEffect(() => {
@@ -261,6 +267,85 @@ export function NarrativeStage() {
     if (localNarrative) {
       updateNarrative(localNarrative)
       setEditingSection(null)
+    }
+  }
+  
+  // Generate full narrative text for the edit modal
+  const getFullNarrativeText = () => {
+    if (!localNarrative) return ''
+    
+    return `## Business Profile
+
+### Background
+${localNarrative.businessProfile.background}
+
+### Industry Context
+${localNarrative.businessProfile.industryContext}
+
+### Business Model
+${localNarrative.businessProfile.businessModel}
+
+## Financial Assessment
+
+### Revenue Trends
+${localNarrative.financialAssessment.revenueTrends}
+
+### Profitability Analysis
+${localNarrative.financialAssessment.profitabilityAnalysis}
+
+### Repayment Capacity
+${localNarrative.financialAssessment.repaymentCapacity}
+
+## Risk Assessment
+
+### Key Risks
+${localNarrative.riskAssessment.keyRisks.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+
+### Risk Mitigants
+${localNarrative.riskAssessment.mitigants.map((m, i) => `${i + 1}. ${m}`).join('\n')}
+
+## Facility Structure
+
+- Recommended Amount: MYR ${localNarrative.facilityStructure.recommendedAmount.toLocaleString()}
+- Tenure: ${localNarrative.facilityStructure.tenure}
+- Collateral: ${localNarrative.facilityStructure.collateral}
+- Guarantees: ${localNarrative.facilityStructure.guarantees}
+`
+  }
+  
+  const handleOpenFullEdit = () => {
+    setFullEditText(getFullNarrativeText())
+    setShowFullEditModal(true)
+  }
+  
+  const handleSubmitFullEdit = () => {
+    if (localNarrative && fullEditText.trim()) {
+      // Update the narrative reasoning and background with the new text
+      const updatedNarrative: CreditNarrative = {
+        ...localNarrative,
+        reasoning: fullEditText,
+        businessProfile: {
+          ...localNarrative.businessProfile,
+          background: fullEditText,
+        },
+      }
+      setLocalNarrative(updatedNarrative)
+      setShowFullEditModal(false)
+      setShowSavePrompt(true)
+    }
+  }
+  
+  const handleSaveToDatabase = () => {
+    if (localNarrative && currentCaseId) {
+      const storageKey = `narrative:${currentCaseId}`
+      const narrativeData = {
+        ...localNarrative,
+        savedAt: new Date().toISOString(),
+      }
+      localStorage.setItem(storageKey, JSON.stringify(narrativeData))
+      setDbSaveSuccess(true)
+      setShowSavePrompt(false)
+      setTimeout(() => setDbSaveSuccess(false), 3000)
     }
   }
 
@@ -505,6 +590,10 @@ export function NarrativeStage() {
         </Button>
         
         <div className="flex gap-3">
+          <Button variant="outline" onClick={handleOpenFullEdit}>
+            <Maximize2 className="h-4 w-4 mr-2" />
+            Edit Full Narrative
+          </Button>
           <Button variant="outline" onClick={handleSaveNarrative}>
             <Save className="h-4 w-4 mr-2" />
             Save Draft
@@ -531,6 +620,81 @@ export function NarrativeStage() {
           )}
         </div>
       </div>
+      
+      {/* Save Prompt */}
+      {showSavePrompt && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4">
+            <p className="text-sm text-foreground mb-3">
+              Narrative updated. Would you like to save this to the database?
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSaveToDatabase}>
+                Save to Database
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setShowSavePrompt(false)}>
+                Not Now
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Database Save Success Badge */}
+      {dbSaveSuccess && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <Badge className="bg-success text-success-foreground px-4 py-2">
+            <CheckCircle2 className="h-4 w-4 mr-2" />
+            Saved to database
+          </Badge>
+        </div>
+      )}
+      
+      {/* Full Edit Modal */}
+      {showFullEditModal && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm">
+          <div className="fixed inset-4 z-50 bg-background border rounded-lg shadow-lg flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Edit3 className="h-5 w-5 text-primary" />
+                Edit Full Narrative
+              </h2>
+              <Button variant="ghost" size="sm" onClick={() => setShowFullEditModal(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            
+            <div className="flex-1 overflow-auto p-4">
+              <div className="max-w-4xl mx-auto space-y-4">
+                <div className="bg-muted/30 rounded-lg p-4 text-sm text-muted-foreground whitespace-pre-wrap font-mono">
+                  {getFullNarrativeText()}
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-foreground">
+                    Please send a new edit
+                  </label>
+                  <Textarea
+                    value={fullEditText}
+                    onChange={(e) => setFullEditText(e.target.value)}
+                    placeholder="Enter your revised narrative here..."
+                    className="min-h-[200px] font-mono text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-end gap-3 p-4 border-t">
+              <Button variant="outline" onClick={() => setShowFullEditModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubmitFullEdit} disabled={!fullEditText.trim()}>
+                Submit Edit
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

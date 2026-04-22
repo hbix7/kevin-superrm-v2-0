@@ -32,6 +32,9 @@ export type QuickActionType =
   | 'run-underwriting'
   | 'generate-narrative'
   | 'edit-narrative'
+  | 'view-full-report'
+  | 'save-to-db'
+  | 'submit-narrative-edit'
   | 'submit-approval'
   | 'back'
 
@@ -105,6 +108,7 @@ export interface ChatMessageMetadata {
   screeningResult?: ScreeningResultCard
   underwritingResult?: UnderwritingResultCard
   narrativePreview?: NarrativePreviewCard
+  fullNarrative?: CreditNarrative
   progress?: ProgressCard
   formFields?: FormField[]
 }
