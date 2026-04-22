@@ -24,6 +24,9 @@ export type QuickActionType =
   | 'confirm'
   | 'edit'
   | 'run-screening'
+  | 'screening-chip'
+  | 'screening-next'
+  | 'screening-add-notes'
   | 'proceed-underwriting'
   | 'upload-documents'
   | 'run-underwriting'
@@ -138,6 +141,7 @@ export interface CollectedProspectData {
   requestedLoanAmount?: number
   directorName?: string
   documents?: CollectedDocuments
+  rapidScreening?: RapidScreeningState
 }
 
 export interface ChatSession {
@@ -246,3 +250,174 @@ export interface CollectedDocuments {
     uploadedAt?: Date
   }
 }
+
+// Rapid Screening Steps - 11 step process
+export type ScreeningOutcome = 'clear' | 'probe' | 'drop'
+
+export interface ScreeningChipOption {
+  id: string
+  label: string
+  outcome: ScreeningOutcome
+  probeMessage?: string
+}
+
+export interface RapidScreeningStep {
+  id: string
+  stepNumber: number
+  title: string
+  dataSource: string
+  question: string
+  chips: ScreeningChipOption[]
+}
+
+export interface ScreeningStepResult {
+  stepId: string
+  selectedChip: string
+  outcome: ScreeningOutcome
+  probeMessage?: string
+  notes?: string
+  timestamp: Date
+}
+
+export interface RapidScreeningState {
+  currentStep: number
+  completedSteps: ScreeningStepResult[]
+  overallOutcome: ScreeningOutcome
+  isComplete: boolean
+  droppedAt?: string
+}
+
+// 11 Rapid Screening Steps Definition
+export const RAPID_SCREENING_STEPS: RapidScreeningStep[] = [
+  {
+    id: 'company-status',
+    stepNumber: 1,
+    title: 'Company Status',
+    dataSource: 'SSM or CTOS website',
+    question: 'What is the company status according to SSM/CTOS?',
+    chips: [
+      { id: 'existing-active', label: 'Existing / Active', outcome: 'clear' },
+      { id: 'dormant', label: 'Dormant', outcome: 'probe', probeMessage: 'Ask customer why company is dormant. Note: SSM marks dormant if bank account has no activity for 6+ months — can be reactivated.' },
+      { id: 'winding-up', label: 'Winding Up', outcome: 'probe', probeMessage: 'Ask: Is this a different company? Is the winding up voluntary or court-ordered?' },
+    ],
+  },
+  {
+    id: 'business-presence',
+    stepNumber: 2,
+    title: 'Business Presence',
+    dataSource: 'Google Maps, company website, social media (FB, TikTok, Instagram)',
+    question: 'Can you confirm the business presence online?',
+    chips: [
+      { id: 'confirmed', label: 'Confirmed presence', outcome: 'clear' },
+      { id: 'no-trace', label: 'No trace found', outcome: 'probe', probeMessage: 'Get address from customer directly. Arrange a site visit to verify.' },
+      { id: 'address-mismatch', label: 'Address mismatch', outcome: 'probe', probeMessage: 'Ask why address differs from internet sources. Request tenancy agreement.' },
+    ],
+  },
+  {
+    id: 'business-activity',
+    stepNumber: 3,
+    title: 'Business Activity',
+    dataSource: 'SSM business code / CTOS MSIC Code',
+    question: 'Does the business activity match the SSM/MSIC code?',
+    chips: [
+      { id: 'consistent', label: 'Consistent match', outcome: 'clear' },
+      { id: 'slight-mismatch', label: 'Slight mismatch', outcome: 'probe', probeMessage: 'Ask customer why there\'s a mismatch. Must be explained clearly in write-up/memo.' },
+      { id: 'completely-unrelated', label: 'Completely unrelated', outcome: 'probe', probeMessage: 'Ask customer why there\'s a mismatch. Must be explained clearly in write-up/memo.' },
+    ],
+  },
+  {
+    id: 'business-age',
+    stepNumber: 4,
+    title: 'Business Age',
+    dataSource: 'SSM incorporation date',
+    question: 'How long has the company been incorporated?',
+    chips: [
+      { id: '3-years-plus', label: '3 years or more', outcome: 'clear' },
+      { id: 'less-than-3', label: 'Less than 3 years', outcome: 'probe', probeMessage: 'Ask: (1) Is this a continuation or expansion of a previous business? (2) Is it an investment holding company?' },
+    ],
+  },
+  {
+    id: 'net-worth',
+    stepNumber: 5,
+    title: 'Net Worth',
+    dataSource: 'SSM share capital & retained earnings / CTOS Lite',
+    question: 'What is the company\'s net worth position?',
+    chips: [
+      { id: 'positive', label: 'Positive net worth', outcome: 'clear' },
+      { id: 'negative', label: 'Negative net worth', outcome: 'probe', probeMessage: 'Ask: (1) What caused the negative net worth? (2) Does customer foresee this as temporary — and how long until recovery?' },
+    ],
+  },
+  {
+    id: 'revenue',
+    stepNumber: 6,
+    title: 'Revenue',
+    dataSource: 'CTOS Lite latest year revenue',
+    question: 'What is the company\'s latest annual revenue?',
+    chips: [
+      { id: 'above-500k', label: 'RM500k or above', outcome: 'clear' },
+      { id: 'below-500k', label: 'Below RM500k', outcome: 'probe', probeMessage: 'Revenue is below the RM500k minimum threshold. Escalate and discuss with supervisor before proceeding.' },
+    ],
+  },
+  {
+    id: 'reputation-legal',
+    stepNumber: 7,
+    title: 'Reputation & Legal',
+    dataSource: 'News sources + CTOS Lite litigation status',
+    question: 'What does the reputation and legal check show?',
+    chips: [
+      { id: 'clean', label: 'Clean', outcome: 'clear' },
+      { id: 'minor-legal', label: 'Minor legal cases', outcome: 'probe', probeMessage: 'Ask if cases are settled or pending. If settled, request court letter or documentary evidence.' },
+      { id: 'significant-news', label: 'Significant negative news', outcome: 'probe', probeMessage: 'More than one negatively impactful news item. Ask customer for full details and justification.' },
+      { id: 'further-dd', label: 'Further due diligence recommended', outcome: 'probe', probeMessage: 'CTOS status is "Further Due Diligence With Consent Recommended." Ask if settled or pending. If settled, obtain court letter or documentary evidence.' },
+    ],
+  },
+  {
+    id: 'director-bankruptcy',
+    stepNumber: 8,
+    title: 'Director Bankruptcy',
+    dataSource: 'Insolvency Dept (MDI/JIM) + CTOS Lite',
+    question: 'What is the director\'s bankruptcy status?',
+    chips: [
+      { id: 'clean', label: 'Clean', outcome: 'clear' },
+      { id: 'fresh-mdi', label: 'Fresh MDI Search Recommended', outcome: 'probe', probeMessage: 'Conduct a fresh MDI search. If still flagged, ask if settled or pending.' },
+      { id: 'settled', label: 'Settled — with documentary evidence', outcome: 'probe', probeMessage: 'Request and verify MDI/JIM documentary evidence before proceeding.' },
+      { id: 'pending', label: 'Pending / outstanding', outcome: 'probe', probeMessage: 'Outstanding bankruptcy matter. Escalate for further due diligence.' },
+    ],
+  },
+  {
+    id: 'director-history',
+    stepNumber: 9,
+    title: 'Director History',
+    dataSource: 'CTOS Lite — Director\'s Date of Appointment',
+    question: 'How long has the director been appointed?',
+    chips: [
+      { id: '3-years-plus', label: 'At least one director with 3+ years', outcome: 'clear' },
+      { id: 'all-under-3', label: 'All directors under 3 years', outcome: 'probe', probeMessage: 'Ask if any director has experience in another company in the same industry. If YES → request name card and do employment verification. If NO → ask if customer can provide a guarantor with relevant industry experience.' },
+    ],
+  },
+  {
+    id: 'industry-risk',
+    stepNumber: 10,
+    title: 'Industry Risk',
+    dataSource: 'Product Dept / Credit Dept stats',
+    question: 'What is the industry risk classification?',
+    chips: [
+      { id: 'within-appetite', label: 'Within risk appetite', outcome: 'clear' },
+      { id: 'non-target', label: 'Non-target industry', outcome: 'probe', probeMessage: 'Confirm with credit team. Cyclical/non-target industries may still qualify with justification.' },
+      { id: 'caution', label: 'Caution lending', outcome: 'probe', probeMessage: 'Proceed only on a 1:1 cash-back basis.' },
+      { id: 'prohibited', label: 'Prohibited lending', outcome: 'drop', probeMessage: 'Prohibited lending category — drop case immediately. Do not proceed.' },
+    ],
+  },
+  {
+    id: 'credit-signals',
+    stepNumber: 11,
+    title: 'Credit Signals (CCRIS)',
+    dataSource: 'CCRIS (requires customer consent — can be pulled via CMB). Also reference the Programme Underwriting PDF as each programme\'s CCRIS criteria differs.',
+    question: 'What does the CCRIS credit check show?',
+    chips: [
+      { id: 'clean', label: 'Clean — 0 overdue', outcome: 'clear' },
+      { id: 'occasional', label: 'Occasional delays', outcome: 'probe', probeMessage: 'Some delinquencies noted. Quantify frequency and recency. Check against the relevant programme\'s CCRIS criteria.' },
+      { id: 'multiple-overdue', label: 'Multiple overdue loans', outcome: 'probe', probeMessage: 'Multiple overdue accounts. Significant credit concern — escalate to credit team before proceeding.' },
+    ],
+  },
+]

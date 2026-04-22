@@ -7,9 +7,12 @@ import type {
   UnderwritingResultCard,
   NarrativePreviewCard,
   RequiredDocument,
-  CollectedDocuments
+  CollectedDocuments,
+  RapidScreeningState,
+  ScreeningStepResult,
+  ScreeningOutcome
 } from './types'
-import { INDUSTRIES, FINANCING_PURPOSES, REQUIRED_DOCUMENTS } from './types'
+import { INDUSTRIES, FINANCING_PURPOSES, REQUIRED_DOCUMENTS, RAPID_SCREENING_STEPS } from './types'
 import type { Prospect, ScreeningResult, UnderwritingResult, CreditNarrative } from '../types'
 
 // Conversation flow definition
@@ -405,19 +408,223 @@ export class ConversationEngine {
     return requiredDocs.every(d => docs[d.id]?.uploaded)
   }
   
-  // Prepare for screening
+  // Initialize rapid screening state
+  initializeRapidScreening(): void {
+    this.collectedData.rapidScreening = {
+      currentStep: 1,
+      completedSteps: [],
+      overallOutcome: 'clear',
+      isComplete: false,
+    }
+  }
+  
+  // Prepare for screening - starts the 11-step rapid screening
   getScreeningStart(): ConversationResponse {
+    this.initializeRapidScreening()
+    
+    const firstStep = RAPID_SCREENING_STEPS[0]
+    const chipActions: QuickAction[] = firstStep.chips.map(chip => ({
+      id: generateId(),
+      label: chip.label,
+      type: 'screening-chip' as const,
+      value: `${firstStep.id}:${chip.id}`,
+      variant: 'outline' as const,
+    }))
+    
     return {
-      message: "Running AI-powered screening now. I'll check:\n\n- Company registry verification\n- Sanctions & PEP checks\n- Credit bureau lookup\n- Industry risk assessment\n- Business viability signals\n\nThis usually takes about 10-15 seconds...",
+      message: `Let's begin the Rapid Screening process. I'll guide you through 11 screening checks.\n\n**Step ${firstStep.stepNumber} of 11: ${firstStep.title}**\n\nData source: ${firstStep.dataSource}\n\n${firstStep.question}`,
+      actions: chipActions,
       metadata: {
-        isLoading: true,
+        progress: {
+          currentStage: 'screening',
+          completedStages: ['client-info', 'documents'],
+          percentage: 30,
+        },
       },
       nextStage: 'screening',
     }
   }
   
-  // Screening complete
-  getScreeningComplete(result: ScreeningResult): ConversationResponse {
+  // Process a screening chip selection
+  processScreeningChip(stepId: string, chipId: string): ConversationResponse {
+    const step = RAPID_SCREENING_STEPS.find(s => s.id === stepId)
+    if (!step) {
+      return { message: "Error: Step not found. Let's continue.", nextStage: 'screening' }
+    }
+    
+    const chip = step.chips.find(c => c.id === chipId)
+    if (!chip) {
+      return { message: "Error: Option not found. Please try again.", nextStage: 'screening' }
+    }
+    
+    // Record the result
+    const result: ScreeningStepResult = {
+      stepId,
+      selectedChip: chipId,
+      outcome: chip.outcome,
+      probeMessage: chip.probeMessage,
+      timestamp: new Date(),
+    }
+    
+    if (!this.collectedData.rapidScreening) {
+      this.initializeRapidScreening()
+    }
+    
+    this.collectedData.rapidScreening!.completedSteps.push(result)
+    
+    // Check for DROP outcome
+    if (chip.outcome === 'drop') {
+      this.collectedData.rapidScreening!.isComplete = true
+      this.collectedData.rapidScreening!.overallOutcome = 'drop'
+      this.collectedData.rapidScreening!.droppedAt = stepId
+      
+      return {
+        message: `**Step ${step.stepNumber}: ${step.title}** - Selected: ${chip.label}\n\n❌ **DROP CASE**\n\n${chip.probeMessage}\n\nThis case cannot proceed further due to a prohibited classification.`,
+        actions: [
+          { id: generateId(), label: 'Start New Case', type: 'start-new-case', variant: 'default' },
+          { id: generateId(), label: 'View All Cases', type: 'view-cases', variant: 'outline' },
+        ],
+        nextStage: 'screening',
+      }
+    }
+    
+    // Update overall outcome if probe
+    if (chip.outcome === 'probe' && this.collectedData.rapidScreening!.overallOutcome === 'clear') {
+      this.collectedData.rapidScreening!.overallOutcome = 'probe'
+    }
+    
+    // Build response based on outcome
+    let outcomeIcon = chip.outcome === 'clear' ? '✅' : '⚠️'
+    let responseMessage = `**Step ${step.stepNumber}: ${step.title}** - Selected: ${chip.label}\n\n${outcomeIcon} **${chip.outcome === 'clear' ? 'CLEAR' : 'PROBE REQUIRED'}**`
+    
+    if (chip.outcome === 'probe' && chip.probeMessage) {
+      responseMessage += `\n\n📋 Action Required:\n${chip.probeMessage}`
+    }
+    
+    // Check if we've completed all steps
+    const nextStepIndex = step.stepNumber // 0-indexed would be step.stepNumber - 1, so next is step.stepNumber
+    if (nextStepIndex >= RAPID_SCREENING_STEPS.length) {
+      // Screening complete
+      this.collectedData.rapidScreening!.isComplete = true
+      this.collectedData.rapidScreening!.currentStep = 11
+      
+      return this.getScreeningComplete()
+    }
+    
+    // Move to next step
+    this.collectedData.rapidScreening!.currentStep = nextStepIndex + 1
+    const nextStep = RAPID_SCREENING_STEPS[nextStepIndex]
+    
+    const nextChipActions: QuickAction[] = nextStep.chips.map(c => ({
+      id: generateId(),
+      label: c.label,
+      type: 'screening-chip' as const,
+      value: `${nextStep.id}:${c.id}`,
+      variant: 'outline' as const,
+    }))
+    
+    const progressPercentage = 30 + Math.round((step.stepNumber / 11) * 30) // 30-60%
+    
+    responseMessage += `\n\n---\n\n**Step ${nextStep.stepNumber} of 11: ${nextStep.title}**\n\nData source: ${nextStep.dataSource}\n\n${nextStep.question}`
+    
+    return {
+      message: responseMessage,
+      actions: nextChipActions,
+      metadata: {
+        progress: {
+          currentStage: 'screening',
+          completedStages: ['client-info', 'documents'],
+          percentage: progressPercentage,
+        },
+      },
+      nextStage: 'screening',
+    }
+  }
+  
+  // Get screening completion summary
+  getScreeningComplete(): ConversationResponse {
+    const screening = this.collectedData.rapidScreening
+    if (!screening) {
+      return { message: "No screening data found.", nextStage: 'screening' }
+    }
+    
+    const clearCount = screening.completedSteps.filter(s => s.outcome === 'clear').length
+    const probeCount = screening.completedSteps.filter(s => s.outcome === 'probe').length
+    
+    let summaryMessage = `**Rapid Screening Complete!**\n\n`
+    summaryMessage += `**Overall Result:** ${screening.overallOutcome === 'clear' ? '✅ ALL CLEAR' : '⚠️ PROBES REQUIRED'}\n\n`
+    summaryMessage += `**Summary:**\n`
+    summaryMessage += `- Clear checks: ${clearCount}\n`
+    summaryMessage += `- Probes required: ${probeCount}\n\n`
+    
+    if (probeCount > 0) {
+      summaryMessage += `**Items Requiring Follow-up:**\n`
+      screening.completedSteps
+        .filter(s => s.outcome === 'probe')
+        .forEach((s, index) => {
+          const step = RAPID_SCREENING_STEPS.find(st => st.id === s.stepId)
+          if (step) {
+            summaryMessage += `\n${index + 1}. **${step.title}**\n   ${s.probeMessage}\n`
+          }
+        })
+      summaryMessage += `\nPlease address these items before proceeding to underwriting.`
+    } else {
+      summaryMessage += `All screening checks passed. The prospect is ready for financial analysis.`
+    }
+    
+    const actions: QuickAction[] = [
+      { id: generateId(), label: 'Proceed to Underwriting', type: 'proceed-underwriting', variant: 'default' },
+    ]
+    
+    if (probeCount > 0) {
+      actions.push({ id: generateId(), label: 'Review Probe Items', type: 'view-cases', variant: 'outline' })
+    }
+    
+    return {
+      message: summaryMessage,
+      actions,
+      metadata: {
+        progress: {
+          currentStage: 'screening',
+          completedStages: ['client-info', 'documents', 'screening'],
+          percentage: 60,
+        },
+      },
+      nextStage: 'screening-results',
+    }
+  }
+  
+  // Get current screening step (for resuming)
+  getCurrentScreeningStep(): ConversationResponse {
+    const screening = this.collectedData.rapidScreening
+    if (!screening || screening.isComplete) {
+      return this.getScreeningStart()
+    }
+    
+    const currentStepIndex = screening.currentStep - 1
+    const step = RAPID_SCREENING_STEPS[currentStepIndex]
+    
+    if (!step) {
+      return this.getScreeningComplete()
+    }
+    
+    const chipActions: QuickAction[] = step.chips.map(chip => ({
+      id: generateId(),
+      label: chip.label,
+      type: 'screening-chip' as const,
+      value: `${step.id}:${chip.id}`,
+      variant: 'outline' as const,
+    }))
+    
+    return {
+      message: `**Step ${step.stepNumber} of 11: ${step.title}**\n\nData source: ${step.dataSource}\n\n${step.question}`,
+      actions: chipActions,
+      nextStage: 'screening',
+    }
+  }
+  
+  // Legacy screening complete with ScreeningResult (for API-based screening)
+  getScreeningCompleteWithResult(result: ScreeningResult): ConversationResponse {
     const recommendation = result.recommendation
     let message = `Screening complete!\n\n`
     

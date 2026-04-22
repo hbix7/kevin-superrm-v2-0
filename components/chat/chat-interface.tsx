@@ -178,102 +178,40 @@ export function ChatInterface() {
         break
       
       case 'run-screening':
-        // Show loading message
-        addMessage({
-          role: 'assistant',
-          content: "Running AI-powered screening now. I'll check company registry, sanctions, credit bureau, and more...",
-          metadata: { isLoading: true },
-          stage: 'screening',
-        })
-        setStage('screening')
+        // Start the 11-step rapid screening process
+        engine.updateData(session?.collectedData || {})
         
-        try {
-          // Build prospect and create case
-          const prospect = engine.buildProspect()
-          const caseId = initializeNewCase(prospect)
-          linkCaseToSession(caseId)
+        // Build prospect and create case first
+        const prospect = engine.buildProspect()
+        const caseId = initializeNewCase(prospect)
+        linkCaseToSession(caseId)
+        
+        // Get the first screening step
+        response = engine.getScreeningStart()
+        updateCollectedData(engine.getData())
+        setStage('screening')
+        break
+      
+      case 'screening-chip':
+        // Process a screening chip selection
+        if (action.value) {
+          const [stepId, chipId] = action.value.split(':')
+          engine.updateData(session?.collectedData || {})
+          response = engine.processScreeningChip(stepId, chipId)
+          updateCollectedData(engine.getData())
           
-          // Run screening via API
-          const screeningResponse = await fetch('/api/screening', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prospect }),
-          })
-          
-          if (!screeningResponse.ok) {
-            throw new Error('Screening failed')
-          }
-          
-          // Parse SSE stream
-          const reader = screeningResponse.body?.getReader()
-          if (!reader) throw new Error('No response body')
-          
-          const decoder = new TextDecoder()
-          let buffer = ''
-          let screeningResult: ScreeningResult | null = null
-          
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
+          // Check if screening resulted in a DROP
+          const screeningState = engine.getData().rapidScreening
+          if (screeningState?.overallOutcome === 'drop') {
+            setStage('screening-results')
+          } else if (screeningState?.isComplete) {
+            setStage('screening-results')
             
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-            
-            for (const line of lines) {
-              const trimmed = line.trim()
-              if (trimmed.startsWith('data:')) {
-                const data = trimmed.slice(5).trim()
-                if (data === '[DONE]') continue
-                try {
-                  const parsed = JSON.parse(data)
-                  if (parsed.type === 'output' && parsed.output) {
-                    screeningResult = parsed.output as ScreeningResult
-                  }
-                } catch {
-                  // Skip invalid JSON
-                }
-              }
-            }
-          }
-          
-          if (screeningResult) {
-            // Update the case in store
+            // Also run the backend screening to generate results for underwriting
             await runScreening()
-            
-            // Remove loading message and show results
-            response = engine.getScreeningComplete(screeningResult)
-            updateLastAssistantMessage({
-              content: response.message,
-              actions: response.actions,
-              metadata: { ...response.metadata, isLoading: false },
-              stage: response.nextStage,
-            })
-            
-            if (response.nextStage) {
-              setStage(response.nextStage)
-            }
-            return
-          }
-        } catch (error) {
-          console.error('Screening error:', error)
-          // Fallback to mock if API fails
-          await runScreening()
-          const mockCase = useDashboardStore.getState().caseData
-          if (mockCase?.screeningResult) {
-            response = engine.getScreeningComplete(mockCase.screeningResult)
-            updateLastAssistantMessage({
-              content: response.message,
-              actions: response.actions,
-              metadata: { ...response.metadata, isLoading: false },
-              stage: response.nextStage,
-            })
-            if (response.nextStage) {
-              setStage(response.nextStage)
-            }
           }
         }
-        return
+        break
       
       case 'proceed-underwriting':
         // Show loading message
